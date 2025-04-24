@@ -1,4 +1,4 @@
-import enviroment as env
+import environment as env
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -85,25 +85,36 @@ def create_h_base(num_of_frame, mean = 0, sigma = 1):
     return h_base
     
 #Compute rate for each frame
-def compute_r(device_positons, h_base, allocation, frame):
+def compute_r(device_positions, h_base, allocation, frame):
     r = []
     r_sub = np.zeros(NUM_DEVICES)
     r_mW = np.zeros(NUM_DEVICES)
     h_base_sub = h_base[0]
+    # print(f"    h_base_sub: {h_base_sub}") 
     h_base_mW = h_base[1]
+    # print(f"    h_base_mW: {h_base_mW}") 
+
     for k in range(NUM_DEVICES):
         sub_channel_index = allocation[0][k]
         mW_beam_index = allocation[1][k]
+        # print(f"    sub_channel_index: {sub_channel_index:.4f}") 
+        # print(f"    mW_beam_index: {mW_beam_index:.4f}") 
+
+
         if(sub_channel_index != -1):
-            h_base_k = env.h_sub(device_positons, k, h_base_sub[k, sub_channel_index])
-            r_sub[k] = env.r_sub(h_base_k, device_index=k)
+            h_sub_k = env.h_sub(device_positions, k, h_base_sub[k, sub_channel_index])
+            # print(f"  h_sub-6GHz: {h_sub_k:.4f}") 
+            r_sub[k] = env.r_sub(h_sub_k, device_index=k)
+            # print(f"  Sub6 Calculated Rate r_sub[k]: {r_sub[k]}")
         if(mW_beam_index != -1):
-            h_base_k = env.h_sub(device_positons, k, h_base_mW[k, mW_beam_index])
-            r_mW[k] = env.r_sub(h_base_k, device_index=k)
+            h_mW_k = env.h_sub(device_positions, k, h_base_mW[k, mW_beam_index])
+            # print(f"  h_mW: {h_mW_k:.4f}") 
+            r_mW[k] = env.r_sub(h_mW_k, device_index=k)
+            # print(f"  mW Calculated Rate r_mW[k]: {r_mW[k]}")
 
         r.append(r_sub)
         r.append(r_mW)
-        return r
+    return r
 
 #Compute number of success packets from AP each frame
 def l_kv_success(r):
@@ -361,6 +372,8 @@ def update_alpha(alpha, V, state, action):
 
 ########## TRAINING ############
 device_positions = env.initialize_pos_of_devices()
+# print(f"    device_positions: {device_positions}") 
+
 state = initialize_state()
 action = initialize_action()
 reward = initialize_reward(state, action)
@@ -370,6 +383,7 @@ Q_tables = initialize_Q_tables(state)
 V = initialize_V(state)
 alpha = initialize_alpha(state)
 packet_loss_rate = np.zeros(shape=(NUM_DEVICES, 2))
+
 
 #Generate h_base for each frame (100000)
 h_base = create_h_base(NUM_OF_FRAME + 1)
@@ -394,6 +408,8 @@ for frame in range(1, NUM_OF_FRAME + 1):
 
     # Set up environment
     h_base_t = h_base[frame]
+    # print(f"Frame {frame}: h_base_sub_t = {h_base_t[0]}")  # In hệ số kênh Sub-6GHz
+    # print(f"Frame {frame}: h_base_mW_t = {h_base_t[1]}")
     state_plot.append(state)
 
     # Select action
@@ -410,7 +426,10 @@ for frame in range(1, NUM_OF_FRAME + 1):
     
 
     # Get feedback
-    r = compute_r(device_positions, h_base_t, allocation,frame)
+    r = compute_r(device_positions, h_base_t, allocation, frame)
+
+    print(f"Frame {frame}: Calculated Rate r = {r}")
+
     l_max = l_kv_success(r)
     l_sub_max = l_max[0]
     l_mW_max = l_max[1]

@@ -21,8 +21,10 @@ MEMORY_SIZE = 10000  # Kích thước bộ nhớ replay
 NUM_EPISODES = 1  # Số episode huấn luyện
 
 P_DBM = 5 #dbm
+# P_DBM  = pow(10, 5/10)*1e-3
 # P = pow(10, P_DBM/10) * 1e-3
 SIGMA = 169 #dbm
+SIGMA = pow(10, -169/10)*1e-3
 I_SUB = I_MW = 0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
@@ -46,18 +48,18 @@ def initialize_pos_of_devices():
             x = 0
             y = 20
         #position device_2
-        if(i == 1):
+        elif(i == 1):
             x = 20
             y = 0
         #position device_3
-        if(i == 2):
+        elif(i == 2):
             x = -55
             y = -60
         #position other devices
         else: 
             x = random.uniform(-80, 80)   
             y = random.uniform(-80, 80)   
-    list_of_devices.append((x,y))        
+        list_of_devices.append((x,y))        
     return list_of_devices
 
 list_of_devices = initialize_pos_of_devices()
@@ -81,12 +83,12 @@ def gennerate_h_base(mean, sigma, size):
     im = np.random.normal(mean, sigma, size)
     h_base = []
     for i in range(size):
-        h_base.append((re[i] + im[i]*1j)/np.sqrt(2))
+        h_base.append(complex(re[i], im[i])/np.sqrt(2))
     return h_base
 
 #Creat h for sub-6GHz each device within frame_t
 def h_sub(list_of_devices, device_index, h_base):
-    h = np.abs(h_base * pow(10, -path_loss_sub(distance_to_AP(list_of_devices[device_index])/20.0))**2)
+    h = np.abs(h_base * pow(10, -path_loss_sub(distance_to_AP(list_of_devices[device_index]))/20.0)**2)
     return h
 
 #Main transmit beam Gain G_b
