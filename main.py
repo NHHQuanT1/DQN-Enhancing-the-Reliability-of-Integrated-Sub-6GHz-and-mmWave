@@ -228,15 +228,37 @@ def update_reward(state, action, old_reward_table, num_of_send_packet, num_of_re
     return old_reward_table
 
 #Compute reward
+# def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
+#     sum = 0
+#     for k in range(NUM_DEVICES):
+#         state_k = state[k]
+#         sum = sum +((num_of_received_packet[k, 0] + num_of_received_packet[k, 1])/(
+#             num_of_send_packet[k, 0] + num_of_send_packet[k, 1])) - (1 - state_k[0]) - (1 - state_k[1])
+#     sum = ((frame_num - 1)*old_reward_value + sum)/frame_num
+#     return sum
 def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
     sum = 0
     for k in range(NUM_DEVICES):
         state_k = state[k]
-        sum = sum +((num_of_received_packet[k, 0] + num_of_received_packet[k, 1])/(
-            num_of_send_packet[k, 0] + num_of_send_packet[k, 1])) - (1 - state_k[0]) - (1 - state_k[1])
-    sum = ((frame_num - 1)*old_reward_value + sum)/frame_num
-    return sum
+        numerator = num_of_received_packet[k, 0] + num_of_received_packet[k, 1]
+        denominator = num_of_send_packet[k, 0] + num_of_send_packet[k, 1]
 
+        # !!! Vấn đề tiềm ẩn: Chia cho 0 !!!
+        if denominator == 0:
+             # Giả sử là 0.0 để phản ánh không có dữ liệu truyền đi.
+             success_rate_k = 0.0
+        else:
+             success_rate_k = numerator / denominator
+
+        plr_penalty_sub = (1 - state_k[0]) # Phạt = 1 nếu PLR Sub6 tệ (state[0]=0)
+        plr_penalty_mW = (1 - state_k[1])  # Phạt = 1 nếu PLR mW tệ (state[1]=0)
+
+        sum = sum + success_rate_k - plr_penalty_sub - plr_penalty_mW
+        # 'sum' bây giờ chứa điểm số tức thời của frame này
+    reward = ((frame_num - 1) * old_reward_value + sum) / frame_num
+    # old_reward_value là giá trị trung bình được tính ở frame trước (frame_num - 1)
+
+    return reward
 #######################
 #CREATE MODEL
 def initialize_Q_tables(first_state):
@@ -314,7 +336,6 @@ def add_new_state_to_table(table, state):
         table.update({state: actions})
     return table
 
-#example
 COUNT = 0
 # Create update Q_table function
 def update_Q_table(Q_table, alpha, reward, state, action, next_state):
@@ -377,7 +398,7 @@ device_positions = env.initialize_pos_of_devices()
 state = initialize_state()
 action = initialize_action()
 reward = initialize_reward(state, action)
-reward_value = 0
+reward_value = 0.0
 allocation = allocate(action)
 Q_tables = initialize_Q_tables(state)
 V = initialize_V(state)
@@ -390,13 +411,13 @@ h_base = create_h_base(NUM_OF_FRAME + 1)
 h_base_t = h_base[0]
 average_r = compute_r(device_positions, h_base_t, allocation=allocate(action),frame=1)
 
-state_plot=[]
-action_plot=[]
-reward_plot=[]
-number_of_sent_packet_plot=[]
-number_of_received_packet_plot=[]
-packet_loss_rate_plot=[]
-rate_plot=[]
+# state_plot=[]
+# action_plot=[]
+# reward_plot=[]
+# number_of_sent_packet_plot=[]
+# number_of_received_packet_plot=[]
+# packet_loss_rate_plot=[]
+# rate_plot=[]
 
 for frame in range(1, NUM_OF_FRAME + 1):
     # Random Q-table
@@ -410,19 +431,19 @@ for frame in range(1, NUM_OF_FRAME + 1):
     h_base_t = h_base[frame]
     # print(f"Frame {frame}: h_base_sub_t = {h_base_t[0]}")  # In hệ số kênh Sub-6GHz
     # print(f"Frame {frame}: h_base_mW_t = {h_base_t[1]}")
-    state_plot.append(state)
+    # state_plot.append(state)
 
     # Select action
     action = choose_action(state, risk_adverse_Q)
     allocation = allocate(action)
-    action_plot.append(action)
+    # action_plot.append(action)
 
     # Perform action
     l_max_estimate = l_kv_success(average_r)
     l_sub_max_estimate = l_max_estimate[0]
     l_mW_max_estimate = l_max_estimate[1]
     number_of_send_packet = perform_action(action, l_sub_max_estimate, l_mW_max_estimate)
-    number_of_sent_packet_plot.append(number_of_send_packet)
+    # number_of_sent_packet_plot.append(number_of_send_packet)
     
 
     # Get feedback
@@ -436,7 +457,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     print(f"So goi tin l_sub_max nhan duoc thanh cong {l_sub_max} tai frame {frame}")
     l_mW_max = l_max[1]
     print(f"So goi tin l_mW_max nhan duoc thanh cong {l_mW_max} tai frame {frame}")
-    rate_plot.append(r)
+    # rate_plot.append(r)
 
     number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
     print(f"number_of_received_packet {number_of_received_packet} tai frame {frame}")
@@ -444,7 +465,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     packet_loss_rate = compute_packet_loss_rate(frame, packet_loss_rate, number_of_received_packet, number_of_send_packet)
     print(f"packet_loss_rate {packet_loss_rate} tai frame {frame}")
 
-    packet_loss_rate_plot.append(packet_loss_rate)
+    # packet_loss_rate_plot.append(packet_loss_rate)
     # number_of_received_packet_plot.append(number_of_received_packet)
     average_r = compute_average_rate(average_r, r, frame)
 

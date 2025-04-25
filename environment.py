@@ -20,11 +20,11 @@ TARGET_UPDATE = 10  # Cập nhật mạng target mỗi 10 bước
 MEMORY_SIZE = 10000  # Kích thước bộ nhớ replay
 NUM_EPISODES = 1  # Số episode huấn luyện
 
-# P_DBM = 5 #dbm
-P_DBM  = pow(10, 5/10)*1e-3
+P_DBM = 5 #dbm
+# P_DBM  = pow(10, 5/10)*1e-3
 # P = pow(10, P_DBM/10) * 1e-3
-# SIGMA = -169 #dbm
-SIGMA = pow(10, -169/10)*1e-3
+SIGMA = -169 #dbm
+# SIGMA = pow(10, -169/10)*1e-3
 I_SUB = I_MW = 0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
@@ -135,8 +135,8 @@ def r_mW(gamma_mW, device_index):
     return r_mW
 
 #Caculator number of success packets device received
-def l_kv_success(r_sub, r_mW, action):
-    pass
+# def l_kv_success(r_sub, r_mW, action):
+#     pass
 
 #Caculator packet loss rate (l_kv: so goi tin quyet dinh gui boi AP)
 def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
