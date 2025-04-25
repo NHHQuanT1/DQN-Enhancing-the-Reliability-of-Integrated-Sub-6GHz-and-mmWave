@@ -16,7 +16,7 @@ BETA = -0.5
 EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
-D = 4000
+D = 40000
 I = 2
 LAMBDA_P = 0.5
 LAMBDA = 0.995
@@ -232,8 +232,8 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
     sum = 0
     for k in range(NUM_DEVICES):
         state_k = state[k]
-        sum = sum +(num_of_received_packet[k, 0] + num_of_received_packet[k, 1])/(
-            num_of_send_packet[k, 0] + num_of_send_packet[k, 1]) - (1 - state_k[0]) - (1 - state_k[1])
+        sum = sum +((num_of_received_packet[k, 0] + num_of_received_packet[k, 1])/(
+            num_of_send_packet[k, 0] + num_of_send_packet[k, 1])) - (1 - state_k[0]) - (1 - state_k[1])
     sum = ((frame_num - 1)*old_reward_value + sum)/frame_num
     return sum
 
@@ -431,20 +431,27 @@ for frame in range(1, NUM_OF_FRAME + 1):
     print(f"Frame {frame}: Calculated Rate r = {r}")
 
     l_max = l_kv_success(r)
+    print(f"Tong so goi tin nhan duoc thanh cong {l_max} tai frame {frame}")
     l_sub_max = l_max[0]
+    print(f"So goi tin l_sub_max nhan duoc thanh cong {l_sub_max} tai frame {frame}")
     l_mW_max = l_max[1]
+    print(f"So goi tin l_mW_max nhan duoc thanh cong {l_mW_max} tai frame {frame}")
     rate_plot.append(r)
 
     number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
+    print(f"number_of_received_packet {number_of_received_packet} tai frame {frame}")
+
     packet_loss_rate = compute_packet_loss_rate(frame, packet_loss_rate, number_of_received_packet, number_of_send_packet)
+    print(f"packet_loss_rate {packet_loss_rate} tai frame {frame}")
+
     packet_loss_rate_plot.append(packet_loss_rate)
-    number_of_received_packet_plot.append(number_of_received_packet)
+    # number_of_received_packet_plot.append(number_of_received_packet)
     average_r = compute_average_rate(average_r, r, frame)
 
     # Compute reward
     # reward = update_reward(state, action, reward,number_of_send_packet, number_of_received_packet, frame)
     reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
-    reward_plot.append(reward_value)
+    # reward_plot.append(reward_value)
     next_state = update_state(state, packet_loss_rate, number_of_received_packet)
 
      # --- IN RA PHẦN THƯỞNG MỖI FRAME ---

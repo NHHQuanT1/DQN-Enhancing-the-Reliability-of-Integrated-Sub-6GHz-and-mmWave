@@ -20,16 +20,16 @@ TARGET_UPDATE = 10  # Cập nhật mạng target mỗi 10 bước
 MEMORY_SIZE = 10000  # Kích thước bộ nhớ replay
 NUM_EPISODES = 1  # Số episode huấn luyện
 
-P_DBM = 5 #dbm
-# P_DBM  = pow(10, 5/10)*1e-3
+# P_DBM = 5 #dbm
+P_DBM  = pow(10, 5/10)*1e-3
 # P = pow(10, P_DBM/10) * 1e-3
-SIGMA = 169 #dbm
+# SIGMA = -169 #dbm
 SIGMA = pow(10, -169/10)*1e-3
 I_SUB = I_MW = 0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
 T = 1e-3
-D = 4000
+D = 40000
 NUM_OF_FRAME = 10000
 LOS_PATH_LOSS = np.random.normal(0, 5.8, NUM_OF_FRAME)
 NLOS_PATH_LOSS = np.random.normal(0, 8.7, NUM_OF_FRAME)
