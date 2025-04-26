@@ -20,11 +20,11 @@ TARGET_UPDATE = 10  # Cập nhật mạng target mỗi 10 bước
 MEMORY_SIZE = 10000  # Kích thước bộ nhớ replay
 NUM_EPISODES = 1  # Số episode huấn luyện
 
-P_DBM = 5 #dbm
-# P_DBM  = pow(10, 5/10)*1e-3
+# P_DBM = 5 #dbm
+P_DBM  = pow(10, 5/10)*1e-3
 # P = pow(10, P_DBM/10) * 1e-3
-SIGMA = -169 #dbm
-# SIGMA = pow(10, -169/10)*1e-3
+# SIGMA = -169 #dbm
+SIGMA = pow(10, -169/10)*1e-3
 I_SUB = I_MW = 0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
@@ -37,7 +37,7 @@ NLOS_PATH_LOSS = np.random.normal(0, 8.7, NUM_OF_FRAME)
 AP_POSITION = (0, 0)
 
 def distance_to_AP(pos_of_device):
-    d = np.sqrt((pos_of_device[0] - AP_POSITION[0])**2 + (pos_of_device[1] - AP_POSITION[1])**2)
+    d = np.sqrt((pos_of_device[0] - AP_POSITION[0])**2 + (pos_of_device[1] - AP_POSITION[1])**2)/1000
     return d
 
 def initialize_pos_of_devices():
@@ -53,7 +53,7 @@ def initialize_pos_of_devices():
             y = 0
         #position device_3
         elif(i == 2):
-            x = -55
+            x = -60
             y = -60
         #position other devices
         else: 
@@ -67,7 +67,7 @@ list_of_devices = initialize_pos_of_devices()
 #Caculator Path loss
 #Path loss Sub_6GHz
 def path_loss_sub(d):
-    return 38.5 + 30*(np.log10(d))
+    return 38.5 + 30*(np.log10(d* 1000))
 #Los Path loss mmWave
 def los_path_loss_mW(d, frame):
     shadowing = LOS_PATH_LOSS[frame - 1]
@@ -77,37 +77,39 @@ def nlos_path_loss_mW(d, frame):
     shadowing = NLOS_PATH_LOSS[frame - 1]
     return 72 + 29.2*(np.log10(d)) + shadowing
 
-#Gennerate coefficient h_base Raileigh
+#Gennerate coefficient h_base Raileigh 
 def gennerate_h_base(mean, sigma, size):
     re = np.random.normal(mean, sigma, size)
     im = np.random.normal(mean, sigma, size)
     h_base = []
     for i in range(size):
         h_base.append(complex(re[i], im[i])/np.sqrt(2))
-    return h_base
+    return h_base #hệ số của phai mờ kênh Raileigh (đang là giá trị số phức)
 
 #Creat h for sub-6GHz each device within frame_t
 def h_sub(list_of_devices, device_index, h_base):
-    h = np.abs(h_base * pow(10, -path_loss_sub(distance_to_AP(list_of_devices[device_index]))/20.0)**2)
+    h = np.abs(h_base * pow(10, -path_loss_sub(distance_to_AP(list_of_devices[device_index]))/20.0))**2
     return h
 
 #Main transmit beam Gain G_b
 def transmit_beam_gain(eta = 5*np.pi/180, beta = 0):
     epsilon = 0.1
-    G = (2*np.pi - (2*np.pi - eta)*epsilon)/eta
+    G = ((2*np.pi - (2*np.pi - eta))*epsilon)/eta
     return G
+G =transmit_beam_gain()
 
 #h for mmWave each device within frame_t
 def h_mW(list_of_devices, device_index, h_base, frame, G):
     #device blocked
     if(device_index == 1):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame)
-        h = G * (h_base * pow(10, -path_loss/20.0)) * G
+        h = G * 1 * pow(10, -path_loss/20.0) * G
     
     #other devices
     else:
         path_loss = los_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame)
-        h = G * (h_base * pow(10, -path_loss/20)) * G
+        # h = np.abs(G * (h_base * pow(10, -path_loss/20)) * G)**2
+        h = G * 1 * pow(10, -path_loss/20.0) * G
     return h
 
 #Caculator SINR of sub-6GHz
@@ -149,5 +151,8 @@ def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
 
 
 
+# device_positions = initialize_pos_of_devices()
 
-
+# h_base = gennerate_h_base(0,1,3)
+# h_sub_v = h_sub(device_positions,0,h_base[0])
+# print(h_sub_v)

@@ -20,7 +20,7 @@ D = 40000
 I = 2
 LAMBDA_P = 0.5
 LAMBDA = 0.995
-X0 = -1
+X0 = 0.1
 def initialize_state():
     state = np.zeros(shape=(NUM_DEVICES, 4))
     return state
@@ -48,7 +48,7 @@ def choose_action(state, Q_table):
         return action
     else:
         max_Q = -np.inf
-        state = tuple([tuple(row) for row in state])
+        state = tuple([tuple(row) for row in state]) #use search in Q_table
         action = tuple(action)
         random_action = []
         for a in Q_table[state]:
@@ -142,15 +142,15 @@ def allocate(action):
     rand_sub = []
     rand_mW = []
     for i in range(NUM_SUBCHANNELS):
-        rand_sub.append(i)                   
+        rand_sub.append(i)     #danh sach chi so kenh 
     for i in range(NUM_BEAMS):
-        rand_mW.append(i)                   
+        rand_mW.append(i)     #danh sach chi so tia              
     
     for k in range(NUM_DEVICES):
         if(action[k] == 0):
             rand_index = np.random.randint(len(rand_sub))
             sub[k] = rand_sub[rand_index]
-            rand_sub.pop(rand_index)
+            rand_sub.pop(rand_index) #xoa kenh da chon ra khoi danh sach
         if(action[k] == 1):
             rand_index = np.random.randint(len(rand_mW))
             mW[k] = rand_mW[rand_index]
@@ -169,7 +169,7 @@ def allocate(action):
 
 
 # AP quyet dinh so goi tin truyen cho device
-def perform_action(action, l_sub_max, l_mW_max):
+def perform_action(action, l_sub_max, l_mW_max): # cac goi nay chinh la goi tin uoc luong l_sub_max_estimate, l_mW_max_estimate vong lap for o model
     number_of_packet = np.zeros(shape=(NUM_DEVICES, 2))
     for k in range(NUM_DEVICES):
         l_sub_max_k = l_sub_max[k]
@@ -190,7 +190,7 @@ def perform_action(action, l_sub_max, l_mW_max):
     return number_of_packet
 
 # Xay dung ham nhan phan hoi ACK/NACK
-def receive_feedback(packet_send, l_sub_max, l_mW_max):
+def receive_feedback(packet_send, l_sub_max, l_mW_max): #l_sub_max, l_mW_max chinh la cac gia tri goi tin nhan duoc tai device
     feedback = np.zeros(shape=(NUM_DEVICES, 2))
 
     for k in range(NUM_DEVICES):
@@ -199,6 +199,9 @@ def receive_feedback(packet_send, l_sub_max, l_mW_max):
 
         feedback[k, 0] = min(l_sub_k, l_sub_max[k])
         feedback[k, 1] = min(l_mW_k, l_mW_max[k])
+
+        # feedback[k, 0] = l_sub_max[k]
+        # feedback[k, 1] = l_mW_max[k]
     return feedback
 
 #Xay dung ham tinh ti le nhan goi tin that bai
@@ -316,7 +319,7 @@ def compute_risk_adverse_Q(Q_tables, random_Q_index):
     
     for state in sum_sqr:
         for action in sum_sqr[state]:
-            sum_sqr[state][action] = -sum_sqr[state][action]*LAMBDA_P/(I-1)
+            sum_sqr[state][action] = -sum_sqr[state][action]*LAMBDA_P/(I-1) #he so ne tranh rui ro
 
     res = add_2_Q_tables({}, sum_sqr)
     res = add_2_Q_tables(res, Q_random)
@@ -413,7 +416,7 @@ average_r = compute_r(device_positions, h_base_t, allocation=allocate(action),fr
 
 # state_plot=[]
 # action_plot=[]
-# reward_plot=[]
+reward_plot=[]
 # number_of_sent_packet_plot=[]
 # number_of_received_packet_plot=[]
 # packet_loss_rate_plot=[]
@@ -429,7 +432,8 @@ for frame in range(1, NUM_OF_FRAME + 1):
 
     # Set up environment
     h_base_t = h_base[frame]
-    # print(f"Frame {frame}: h_base_sub_t = {h_base_t[0]}")  # In hệ số kênh Sub-6GHz
+    h_base_sub_t = h_base_t[0]
+    print(f"Frame {frame}: h_base_sub_t = {h_base_t[0]}")  # In hệ số kênh Sub-6GHz
     # print(f"Frame {frame}: h_base_mW_t = {h_base_t[1]}")
     # state_plot.append(state)
 
@@ -474,9 +478,11 @@ for frame in range(1, NUM_OF_FRAME + 1):
     reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
     # reward_plot.append(reward_value)
     next_state = update_state(state, packet_loss_rate, number_of_received_packet)
+    reward_plot=[].append(reward_value)
 
      # --- IN RA PHẦN THƯỞNG MỖI FRAME ---
     print(f"Frame {frame}: Reward = {reward_value:.4f}") # In reward của frame hiện tại
+    # print(f"Gia tri cua bien G: {env.G}")
 
     # Generate mask J
     J = np.random.poisson(1, I)
@@ -492,3 +498,16 @@ for frame in range(1, NUM_OF_FRAME + 1):
     state = next_state
 
     print('frame: ',frame)
+
+# # print("COUNT: {COUNT}")
+# # Vẽ đồ thị
+# plt.figure(figsize=(12, 6))
+# plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+# # Thêm tiêu đề và nhãn trục
+# plt.title('Biểu đồ Reward theo từng Frame')
+# plt.xlabel('Frame')
+# plt.ylabel('Reward')
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
