@@ -125,8 +125,8 @@ def l_kv_success(r):
 def compute_average_rate(average_r, last_r, frame_num):
     avg_r = average_r.copy()
     for k in range(NUM_DEVICES):
-        avg_r[0][k] = (last_r[0][k] + avg_r[0][k]*(frame_num - 1)/frame_num)
-        avg_r[1][k] = (last_r[1][k] + avg_r[1][k]*(frame_num - 1)/frame_num)
+        avg_r[0][k] = (last_r[0][k] + avg_r[0][k]*(frame_num - 1))/frame_num
+        avg_r[1][k] = (last_r[1][k] + avg_r[1][k]*(frame_num - 1))/frame_num #toc do trung binh de uoc luong so goi tin gui
 
     return avg_r
 
@@ -264,6 +264,7 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
     return reward
 #######################
 #CREATE MODEL
+# Tạo I bảng Q riêng biệt 
 def initialize_Q_tables(first_state):
     Q_tables = []
     first_state = tuple([tuple(row) for row in first_state])
@@ -274,25 +275,42 @@ def initialize_Q_tables(first_state):
     return Q_tables
 
 #create 2 Q_tables
-def add_2_Q_tables(Q1, Q2):
+def sum_2_Q_tables(Q1, Q2): #tổng 2 state của 2 tables
     q =Q1.copy()
     for state in Q2:
-        if(state in q):
+        if(state in q): #nếu trạng thái đó đã có ở Q1
             for a in q[state]:
-                q[state][a] += Q2[state][a]
+                q[state][a] += Q2[state][a] #cộng lại
         else:
-            q.update({state: Q2[state].copy()})
+            q.update({state: Q2[state].copy()}) #chưa có thì copy trạng thái từ Q2 sang
     return q
 
 #Create average Q table function
+# def average_Q_table(Q_tables):
+#     res = {}
+#     for state in range(len(Q_tables)):
+#         res = add_2_Q_tables(res, Q_tables[state])
+#     for state in res: 
+#         for action in res[state]:
+#             res[state][action] = res[state][action]/I
+#     return res
+
 def average_Q_table(Q_tables):
     res = {}
-    for state in range(len(Q_tables)):
-        res = add_2_Q_tables(res, Q_tables[state])
+    for Q in Q_tables:
+        for state in Q:
+            # Tạo 1 Q_table chỉ có state này thôi
+            Q_single_state = {state: Q[state]}
+            # Cộng vào res
+            res = sum_2_Q_tables(res, Q_single_state)
+
+    # Sau khi cộng xong, chia trung bình
     for state in res: 
         for action in res[state]:
-            res[state][action] = res[state][action]/I
+            res[state][action] /= I
+
     return res
+
 
 def u(x):
     return -np.exp(BETA*x)
@@ -310,19 +328,19 @@ def compute_risk_adverse_Q(Q_tables, random_Q_index):
     
     for i in range(I):
         sub = {}
-        sub = add_2_Q_tables(sub, Q_tables[i])
-        sub = add_2_Q_tables(sub, minus_Q_average)
+        sub = sum_2_Q_tables(sub, Q_tables[i])
+        sub = sum_2_Q_tables(sub, minus_Q_average)
         for state in sub:
             for action in sub[state]:
                 sub[state][action] *= sub[state][action]
-        sum_sqr = add_2_Q_tables(sum_sqr, sub)
+        sum_sqr = sum_2_Q_tables(sum_sqr, sub)
     
     for state in sum_sqr:
         for action in sum_sqr[state]:
             sum_sqr[state][action] = -sum_sqr[state][action]*LAMBDA_P/(I-1) #he so ne tranh rui ro
 
-    res = add_2_Q_tables({}, sum_sqr)
-    res = add_2_Q_tables(res, Q_random)
+    res = sum_2_Q_tables({}, sum_sqr)
+    res = sum_2_Q_tables(res, Q_random)
     return res
 
 def add_new_state_to_table(table, state):
@@ -433,7 +451,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # Set up environment
     h_base_t = h_base[frame]
     h_base_sub_t = h_base_t[0]
-    print(f"Frame {frame}: h_base_sub_t = {h_base_t[0]}")  # In hệ số kênh Sub-6GHz
+    # print(f"Frame {frame}: h_base_sub_t = {h_base_t[0]}")  # In hệ số kênh Sub-6GHz
     # print(f"Frame {frame}: h_base_mW_t = {h_base_t[1]}")
     # state_plot.append(state)
 
@@ -464,6 +482,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # rate_plot.append(r)
 
     number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
+    number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
     print(f"number_of_received_packet {number_of_received_packet} tai frame {frame}")
 
     packet_loss_rate = compute_packet_loss_rate(frame, packet_loss_rate, number_of_received_packet, number_of_send_packet)
@@ -478,8 +497,8 @@ for frame in range(1, NUM_OF_FRAME + 1):
     reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
     # reward_plot.append(reward_value)
     next_state = update_state(state, packet_loss_rate, number_of_received_packet)
-    reward_plot=[].append(reward_value)
-
+    reward_plot.append(reward_value)
+    # print(f"reward_plot {reward_plot}") # In reward của frame hiện tại
      # --- IN RA PHẦN THƯỞNG MỖI FRAME ---
     print(f"Frame {frame}: Reward = {reward_value:.4f}") # In reward của frame hiện tại
     # print(f"Gia tri cua bien G: {env.G}")
@@ -499,15 +518,15 @@ for frame in range(1, NUM_OF_FRAME + 1):
 
     print('frame: ',frame)
 
-# # print("COUNT: {COUNT}")
-# # Vẽ đồ thị
-# plt.figure(figsize=(12, 6))
-# plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-# # Thêm tiêu đề và nhãn trục
-# plt.title('Biểu đồ Reward theo từng Frame')
-# plt.xlabel('Frame')
-# plt.ylabel('Reward')
-# plt.grid(True)
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
+# print("COUNT: {COUNT}")
+# Vẽ đồ thị
+plt.figure(figsize=(12, 6))
+plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+# Thêm tiêu đề và nhãn trục
+plt.title('Biểu đồ Reward theo từng Frame')
+plt.xlabel('Frame')
+plt.ylabel('Reward')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
