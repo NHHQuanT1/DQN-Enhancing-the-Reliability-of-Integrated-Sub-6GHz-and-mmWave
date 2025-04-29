@@ -20,7 +20,7 @@ D = 40000
 I = 2
 LAMBDA_P = 0.5
 LAMBDA = 0.995
-X0 = 0.1
+X0 = 1
 def initialize_state():
     state = np.zeros(shape=(NUM_DEVICES, 4))
     return state
@@ -107,9 +107,9 @@ def compute_r(device_positions, h_base, allocation, frame):
             r_sub[k] = env.r_sub(h_sub_k, device_index=k)
             # print(f"  Sub6 Calculated Rate r_sub[k]: {r_sub[k]}")
         if(mW_beam_index != -1):
-            h_mW_k = env.h_sub(device_positions, k, h_base_mW[k, mW_beam_index])
+            h_mW_k = env.h_mW(device_positions, k, h_base_mW[k, mW_beam_index], frame)
             # print(f"  h_mW: {h_mW_k:.4f}") 
-            r_mW[k] = env.r_sub(h_mW_k, device_index=k)
+            r_mW[k] = env.r_mW(h_mW_k, device_index=k)
             # print(f"  mW Calculated Rate r_mW[k]: {r_mW[k]}")
 
         r.append(r_sub)

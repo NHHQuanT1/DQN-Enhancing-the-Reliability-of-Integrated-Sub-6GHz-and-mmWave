@@ -96,20 +96,19 @@ def transmit_beam_gain(eta = 5*np.pi/180, beta = 0):
     epsilon = 0.1
     G = ((2*np.pi - (2*np.pi - eta))*epsilon)/eta
     return G
-G =transmit_beam_gain()
 
 #h for mmWave each device within frame_t
-def h_mW(list_of_devices, device_index, h_base, frame, G):
+def h_mW(list_of_devices, device_index, h_base, frame,eta = 5*np.pi/180, beta = 0):
     #device blocked
     if(device_index == 1):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame)
-        h = G * 1 * pow(10, -path_loss/20.0) * G
+        h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/20.0) * 0.1
     
     #other devices
     else:
         path_loss = los_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame)
         # h = np.abs(G * (h_base * pow(10, -path_loss/20)) * G)**2
-        h = G * 1 * pow(10, -path_loss/20.0) * G
+        h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/20.0) * transmit_beam_gain(eta, beta) # transmit_beam_gain(eta, beta) chinh la tinh gia tri G
     return h
 
 #Caculator SINR of sub-6GHz
