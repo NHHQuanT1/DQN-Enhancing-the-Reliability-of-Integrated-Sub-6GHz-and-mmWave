@@ -25,7 +25,7 @@ def initialize_state():
     state = np.zeros(shape=(NUM_DEVICES, 4))
     return state
 
-def update_state(state, plr, feedback):
+def update_state(state, plr, feedback): #update trạng thái so với PLR_MAX = 0.1
     next_state = np.zeros(shape=(NUM_DEVICES, 4))
     for k in range(NUM_DEVICES):
         for i in range(2):
@@ -33,7 +33,7 @@ def update_state(state, plr, feedback):
                 next_state[k, i] = 1
             elif(plr[k, i] > PLR_MAX):
                 next_state[k, i] = 0
-            next_state[k, i+2] = feedback[k, i]
+            # next_state[k, i+2] = feedback[k, i]
     return next_state
 
 def initialize_action():
@@ -107,7 +107,7 @@ def compute_r(device_positions, h_base, allocation, frame):
             r_sub[k] = env.r_sub(h_sub_k, device_index=k)
             # print(f"  Sub6 Calculated Rate r_sub[k]: {r_sub[k]}")
         if(mW_beam_index != -1):
-            h_mW_k = env.h_mW(device_positions, k, h_base_mW[k, mW_beam_index], frame)
+            h_mW_k = env.h_mW(device_positions, k, frame)
             # print(f"  h_mW: {h_mW_k:.4f}") 
             r_mW[k] = env.r_mW(h_mW_k, device_index=k)
             # print(f"  mW Calculated Rate r_mW[k]: {r_mW[k]}")
@@ -239,10 +239,11 @@ def update_reward(state, action, old_reward_table, num_of_send_packet, num_of_re
 #             num_of_send_packet[k, 0] + num_of_send_packet[k, 1])) - (1 - state_k[0]) - (1 - state_k[1])
 #     sum = ((frame_num - 1)*old_reward_value + sum)/frame_num
 #     return sum
-def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
+def compute_reward(plr_state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
     sum = 0
     for k in range(NUM_DEVICES):
-        state_k = state[k]
+        # plr_state = plr_state[k]
+        plr_state_k = plr_state[k]
         numerator = num_of_received_packet[k, 0] + num_of_received_packet[k, 1]
         denominator = num_of_send_packet[k, 0] + num_of_send_packet[k, 1]
 
@@ -253,8 +254,8 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
         else:
              success_rate_k = numerator / denominator
 
-        plr_penalty_sub = (1 - state_k[0]) # Phạt = 1 nếu PLR Sub6 tệ (state[0]=0)
-        plr_penalty_mW = (1 - state_k[1])  # Phạt = 1 nếu PLR mW tệ (state[1]=0)
+        plr_penalty_sub = (1 - plr_state_k[0]) # Phạt = 1 nếu PLR Sub6 tệ (state[0]=0)
+        plr_penalty_mW = (1 - plr_state_k[1])  # Phạt = 1 nếu PLR mW tệ (state[1]=0)
 
         sum = sum + success_rate_k - plr_penalty_sub - plr_penalty_mW
         # 'sum' bây giờ chứa điểm số tức thời của frame này
@@ -491,16 +492,17 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # packet_loss_rate_plot.append(packet_loss_rate)
     # number_of_received_packet_plot.append(number_of_received_packet)
     average_r = compute_average_rate(average_r, r, frame)
-
+    plr_state = update_state(state, packet_loss_rate, frame)
     # Compute reward
     # reward = update_reward(state, action, reward,number_of_send_packet, number_of_received_packet, frame)
-    reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
+    # reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
+    reward_value = compute_reward(plr_state, number_of_send_packet, number_of_received_packet,reward_value,frame)
     # reward_plot.append(reward_value)
     next_state = update_state(state, packet_loss_rate, number_of_received_packet)
     reward_plot.append(reward_value)
     # print(f"reward_plot {reward_plot}") # In reward của frame hiện tại
      # --- IN RA PHẦN THƯỞNG MỖI FRAME ---
-    print(f"Frame {frame}: Reward = {reward_value:.4f}") # In reward của frame hiện tại
+    print(f"Frame {frame}: Reward = {reward_value}") # In reward của frame hiện tại
     # print(f"Gia tri cua bien G: {env.G}")
 
     # Generate mask J
