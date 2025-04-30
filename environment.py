@@ -20,11 +20,11 @@ TARGET_UPDATE = 10  # Cập nhật mạng target mỗi 10 bước
 MEMORY_SIZE = 10000  # Kích thước bộ nhớ replay
 NUM_EPISODES = 1  # Số episode huấn luyện
 
-# P_DBM = 5 #dbm
-P_DBM  = pow(10, 5/10)*1e-3
+P_DBM = 5 #dbm
+# P_DBM  = pow(10, 5/10)*1e-3
 # P = pow(10, P_DBM/10) * 1e-3
-# SIGMA = -169 #dbm
-SIGMA = pow(10, -169/10)*1e-3
+SIGMA = -169 #dbm
+# SIGMA = pow(10, -169/10)*1e-3
 I_SUB = I_MW = 0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
@@ -70,13 +70,13 @@ def path_loss_sub(d):
     return 38.5 + 30*(np.log10(d* 1000))
 #Los Path loss mmWave
 def los_path_loss_mW(d, frame):
-    # shadowing = LOS_PATH_LOSS[frame - 1]
-    shadowing = LOS_PATH_LOSS[frame]
+    shadowing = LOS_PATH_LOSS[frame - 1]
+    # shadowing = LOS_PATH_LOSS[frame]
     return 61.4 + 20*(np.log10(d)) + shadowing
 #NLos path loss mmWave
 def nlos_path_loss_mW(d, frame):
-    # shadowing = NLOS_PATH_LOSS[frame - 1]
-    shadowing = NLOS_PATH_LOSS[frame]
+    shadowing = NLOS_PATH_LOSS[frame - 1]
+    # shadowing = NLOS_PATH_LOSS[frame]
     return 72 + 29.2*(np.log10(d)) + shadowing
 
 #Gennerate coefficient h_base Raileigh 
@@ -105,12 +105,14 @@ def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0): #tr
     if(device_index == 1):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame) # giá trị PL tại frame_num của beam device k
         h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/20.0) * 0.1
+        # h = transmit_beam_gain(eta, beta) * 1 * path_loss * 0.1
     
     #other devices
     else:
         path_loss = los_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame)
         # h = np.abs(G * (h_base * pow(10, -path_loss/20)) * G)**2
         h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/20.0) * transmit_beam_gain(eta, beta) # transmit_beam_gain(eta, beta) chinh la tinh gia tri G
+        # h = transmit_beam_gain(eta, beta) * 1 * path_loss * transmit_beam_gain(eta, beta) # transmit_beam_gain(eta, beta) chinh la tinh gia tri G
     return h
 
 #Caculator SINR of sub-6GHz

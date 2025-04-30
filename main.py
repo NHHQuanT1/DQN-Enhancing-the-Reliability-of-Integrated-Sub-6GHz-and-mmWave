@@ -85,11 +85,13 @@ def create_h_base(num_of_frame, mean = 0, sigma = 1):
     return h_base
     
 #Compute rate for each frame
-def compute_r(device_positions, h_base, allocation, frame):
+def compute_r(device_positions, h_base, allocation, frame): #tính giá trị vận tốc trên từng giao diện ở từng thời điểm
     r = []
     r_sub = np.zeros(NUM_DEVICES)
     r_mW = np.zeros(NUM_DEVICES)
     h_base_sub = h_base[0]
+    num_of_beams_t = sum(1 for x in allocation[1] if x != -1) #tổng các phần từ khác trừ 1, hàm này sử dụng generator expression, với mỗi phần tử phù hợp ĐK sẽ lưu vào mảng giá trị =1 rồi tổng lại
+
     # print(f"    h_base_sub: {h_base_sub}") 
     # h_base_mW = h_base[1]
     # print(f"    h_base_mW: {h_base_mW}") 
@@ -109,7 +111,7 @@ def compute_r(device_positions, h_base, allocation, frame):
         if(mW_beam_index != -1):
             h_mW_k = env.h_mW(device_positions, k, frame)
             # print(f"  h_mW: {h_mW_k:.4f}") 
-            r_mW[k] = env.r_mW(h_mW_k, device_index=k)
+            r_mW[k] = (env.r_mW(h_mW_k, device_index=k))/num_of_beams_t
             # print(f"  mW Calculated Rate r_mW[k]: {r_mW[k]}")
 
         r.append(r_sub)
@@ -165,7 +167,7 @@ def allocate(action):
             rand_sub.pop(rand_sub_index)
             rand_mW.pop(rand_mW_index)
     allocate = [sub, mW]
-    return allocate
+    return allocate #trả về danh sách kênh, số thứ tự kênh thứ bao nhiêu (mỗi interface có 4 kênh) được chọn tương ứng cho device k đó 
 
 
 # AP quyet dinh so goi tin truyen cho device
@@ -409,7 +411,7 @@ def update_alpha(alpha, V, state, action):
         alpha[state][action] = 1/V[state][action]
     else:
         add_new_state_to_table(alpha, state)
-        alpha[state][action] = 1/V[state][action]
+        # alpha[state][action] = 1/V[state][action]
     return alpha
 
 
@@ -442,7 +444,7 @@ reward_plot=[]
 
 for frame in range(1, NUM_OF_FRAME + 1):
     # Random Q-table
-    H = np.random.randint(0, I) #chọn ngẫu nhiên giá trị H từ 1 đến I
+    H = np.random.randint(0, I) #chọn ngẫu nhiên giá trị H từ 1 đến I (index Q = H-1)
     risk_adverse_Q = compute_risk_averse_Q(Q_tables, H)
 
     # Update EPSILON
