@@ -33,7 +33,7 @@ def update_state(state, plr, feedback): #update trạng thái so với PLR_MAX =
                 next_state[k, i] = 1
             elif(plr[k, i] > PLR_MAX):
                 next_state[k, i] = 0
-            # next_state[k, i+2] = feedback[k, i]
+            next_state[k, i+2] = feedback[k, i]
     return next_state
 
 def initialize_action():
@@ -175,7 +175,7 @@ def perform_action(action, l_sub_max, l_mW_max): # cac goi nay chinh la goi tin 
         l_sub_max_k = l_sub_max[k]
         l_mW_max_k = l_mW_max[k]
         if(action[k] == 0):
-            number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS)
+            number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS) #lấy giá trị nhỏ hơn giữa giá trị ước lượng với số gói tin tối đa L_k = 6
             number_of_packet[k, 1] = 0
         if(action[k] == 1):
             number_of_packet[k, 0] = 0
@@ -239,11 +239,11 @@ def update_reward(state, action, old_reward_table, num_of_send_packet, num_of_re
 #             num_of_send_packet[k, 0] + num_of_send_packet[k, 1])) - (1 - state_k[0]) - (1 - state_k[1])
 #     sum = ((frame_num - 1)*old_reward_value + sum)/frame_num
 #     return sum
-def compute_reward(plr_state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
+def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
     sum = 0
     for k in range(NUM_DEVICES):
         # plr_state = plr_state[k]
-        plr_state_k = plr_state[k]
+        state_k = state[k]
         numerator = num_of_received_packet[k, 0] + num_of_received_packet[k, 1]
         denominator = num_of_send_packet[k, 0] + num_of_send_packet[k, 1]
 
@@ -254,8 +254,8 @@ def compute_reward(plr_state, num_of_send_packet, num_of_received_packet, old_re
         else:
              success_rate_k = numerator / denominator
 
-        plr_penalty_sub = (1 - plr_state_k[0]) # Phạt = 1 nếu PLR Sub6 tệ (state[0]=0)
-        plr_penalty_mW = (1 - plr_state_k[1])  # Phạt = 1 nếu PLR mW tệ (state[1]=0)
+        plr_penalty_sub = (1 - state_k[0]) # Phạt = 1 nếu PLR Sub6 tệ (state[0]=0)
+        plr_penalty_mW = (1 - state_k[1])  # Phạt = 1 nếu PLR mW tệ (state[1]=0)
 
         sum = sum + success_rate_k - plr_penalty_sub - plr_penalty_mW
         # 'sum' bây giờ chứa điểm số tức thời của frame này
@@ -300,7 +300,7 @@ def average_Q_table(Q_tables):
     res = {}
     for Q in Q_tables:
         for state in Q:
-            # Tạo 1 Q_table chỉ có state này thôi
+            # Tạo 1 Q_table chỉ có state
             Q_single_state = {state: Q[state]}
             # Cộng vào res
             res = sum_2_Q_tables(res, Q_single_state)
@@ -390,7 +390,7 @@ def initialize_V(first_state):
 def update_V(V, state, action):
     state = tuple([tuple(row) for row in state])
     action = tuple(action)
-    if(state in V):
+    if(state in V): #nếu cặp trạng thái - hành động đó đã có ở V tăng giá trị V[state][action] lên 1
         V[state][action] += 1
     else:
         add_new_state_to_table(V, state)
@@ -405,7 +405,7 @@ def initialize_alpha(first_state):
 def update_alpha(alpha, V, state, action):
     state = tuple([tuple(row) for row in state])
     action = tuple(action)
-    if(state in alpha):
+    if(state in alpha): #giảm tỉ lệ học cặp trạng thái - hành động đó
         alpha[state][action] = 1/V[state][action]
     else:
         add_new_state_to_table(alpha, state)
@@ -416,7 +416,6 @@ def update_alpha(alpha, V, state, action):
 ########## TRAINING ############
 device_positions = env.initialize_pos_of_devices()
 # print(f"    device_positions: {device_positions}") 
-
 state = initialize_state()
 action = initialize_action()
 reward = initialize_reward(state, action)
@@ -483,7 +482,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # rate_plot.append(r)
 
     number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
-    number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
+    # number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
     print(f"number_of_received_packet {number_of_received_packet} tai frame {frame}")
 
     packet_loss_rate = compute_packet_loss_rate(frame, packet_loss_rate, number_of_received_packet, number_of_send_packet)
@@ -492,13 +491,12 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # packet_loss_rate_plot.append(packet_loss_rate)
     # number_of_received_packet_plot.append(number_of_received_packet)
     average_r = compute_average_rate(average_r, r, frame)
-    plr_state = update_state(state, packet_loss_rate, frame)
     # Compute reward
     # reward = update_reward(state, action, reward,number_of_send_packet, number_of_received_packet, frame)
-    # reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
-    reward_value = compute_reward(plr_state, number_of_send_packet, number_of_received_packet,reward_value,frame)
+    reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
+    # reward_value = compute_reward(plr_state, number_of_send_packet, number_of_received_packet,reward_value,frame)
     # reward_plot.append(reward_value)
-    next_state = update_state(state, packet_loss_rate, number_of_received_packet)
+    next_state = update_state(state, packet_loss_rate, number_of_received_packet) #number_of_received_packet chính là feedback
     reward_plot.append(reward_value)
     # print(f"reward_plot {reward_plot}") # In reward của frame hiện tại
      # --- IN RA PHẦN THƯỞNG MỖI FRAME ---
@@ -509,7 +507,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     J = np.random.poisson(1, I)
 
     for i in range(I):
-        next_state_tuple = tuple([tuple(row) for row in next_state])
+        next_state_tuple = tuple([tuple(row) for row in next_state]) #chuyển đổi từ numpy sang tuple của các tuple
         if (J[i] == 1):
             V[i] = update_V(V[i],state,action)
             alpha[i] = update_alpha(alpha[i], V[i],state,action)
