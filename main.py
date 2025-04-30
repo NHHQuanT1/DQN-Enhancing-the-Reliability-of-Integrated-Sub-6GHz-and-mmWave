@@ -91,7 +91,7 @@ def compute_r(device_positions, h_base, allocation, frame):
     r_mW = np.zeros(NUM_DEVICES)
     h_base_sub = h_base[0]
     # print(f"    h_base_sub: {h_base_sub}") 
-    h_base_mW = h_base[1]
+    # h_base_mW = h_base[1]
     # print(f"    h_base_mW: {h_base_mW}") 
 
     for k in range(NUM_DEVICES):
@@ -277,7 +277,7 @@ def initialize_Q_tables(first_state):
 
 #create 2 Q_tables
 def sum_2_Q_tables(Q1, Q2): #tổng 2 state của 2 tables
-    q =Q1.copy()
+    q = Q1.copy()
     for state in Q2:
         if(state in q): #nếu trạng thái đó đã có ở Q1
             for a in q[state]:
@@ -297,7 +297,7 @@ def sum_2_Q_tables(Q1, Q2): #tổng 2 state của 2 tables
 #     return res
 
 def average_Q_table(Q_tables):
-    res = {}
+    res = {} #khởi tạo 1 dict rỗng
     for Q in Q_tables:
         for state in Q:
             # Tạo 1 Q_table chỉ có state
@@ -317,7 +317,7 @@ def u(x):
     return -np.exp(BETA*x)
 
 #Creata compute risk averge Q_tables function
-def compute_risk_adverse_Q(Q_tables, random_Q_index):
+def compute_risk_averse_Q(Q_tables, random_Q_index):
     Q_random = Q_tables[random_Q_index].copy()
     Q_average = average_Q_table(Q_tables)
     sum_sqr = {}
@@ -442,15 +442,15 @@ reward_plot=[]
 
 for frame in range(1, NUM_OF_FRAME + 1):
     # Random Q-table
-    H = np.random.randint(0, I)
-    risk_adverse_Q = compute_risk_adverse_Q(Q_tables, H)
+    H = np.random.randint(0, I) #chọn ngẫu nhiên giá trị H từ 1 đến I
+    risk_adverse_Q = compute_risk_averse_Q(Q_tables, H)
 
     # Update EPSILON
     EPSILON = EPSILON * LAMBDA
 
     # Set up environment
     h_base_t = h_base[frame]
-    h_base_sub_t = h_base_t[0]
+    h_base_sub_t = h_base_t[0] #giá trị này là giá trị đang ở số phức
     # print(f"Frame {frame}: h_base_sub_t = {h_base_t[0]}")  # In hệ số kênh Sub-6GHz
     # print(f"Frame {frame}: h_base_mW_t = {h_base_t[1]}")
     # state_plot.append(state)
@@ -461,7 +461,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # action_plot.append(action)
 
     # Perform action
-    l_max_estimate = l_kv_success(average_r)
+    l_max_estimate = l_kv_success(average_r) #sử dụng hàm tính toán gói tin nhận được --> ước lượng gói tin gửi đi từ AP
     l_sub_max_estimate = l_max_estimate[0]
     l_mW_max_estimate = l_max_estimate[1]
     number_of_send_packet = perform_action(action, l_sub_max_estimate, l_mW_max_estimate)
@@ -469,11 +469,11 @@ for frame in range(1, NUM_OF_FRAME + 1):
     
 
     # Get feedback
-    r = compute_r(device_positions, h_base_t, allocation, frame)
+    r = compute_r(device_positions, h_base_t, allocation, frame) #vận tốc tại device
 
     print(f"Frame {frame}: Calculated Rate r = {r}")
 
-    l_max = l_kv_success(r)
+    l_max = l_kv_success(r) #gói tin nhận được thành công
     print(f"Tong so goi tin nhan duoc thanh cong {l_max} tai frame {frame}")
     l_sub_max = l_max[0]
     print(f"So goi tin l_sub_max nhan duoc thanh cong {l_sub_max} tai frame {frame}")
@@ -490,7 +490,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
 
     # packet_loss_rate_plot.append(packet_loss_rate)
     # number_of_received_packet_plot.append(number_of_received_packet)
-    average_r = compute_average_rate(average_r, r, frame)
+    average_r = compute_average_rate(average_r, r, frame) #tính toán giá trị vận tốc trung bình để ước lượng gói tin
     # Compute reward
     # reward = update_reward(state, action, reward,number_of_send_packet, number_of_received_packet, frame)
     reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)

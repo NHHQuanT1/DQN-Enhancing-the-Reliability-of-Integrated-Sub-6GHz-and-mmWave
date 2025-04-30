@@ -70,11 +70,13 @@ def path_loss_sub(d):
     return 38.5 + 30*(np.log10(d* 1000))
 #Los Path loss mmWave
 def los_path_loss_mW(d, frame):
-    shadowing = LOS_PATH_LOSS[frame - 1]
+    # shadowing = LOS_PATH_LOSS[frame - 1]
+    shadowing = LOS_PATH_LOSS[frame]
     return 61.4 + 20*(np.log10(d)) + shadowing
 #NLos path loss mmWave
 def nlos_path_loss_mW(d, frame):
-    shadowing = NLOS_PATH_LOSS[frame - 1]
+    # shadowing = NLOS_PATH_LOSS[frame - 1]
+    shadowing = NLOS_PATH_LOSS[frame]
     return 72 + 29.2*(np.log10(d)) + shadowing
 
 #Gennerate coefficient h_base Raileigh 
@@ -98,7 +100,7 @@ def transmit_beam_gain(eta = 5*np.pi/180, beta = 0):
     return G
 
 #h for mmWave each device within frame_t
-def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0):
+def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0): #truyền vào vị trí các device, device k, frame
     #device blocked
     if(device_index == 1):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame) # giá trị PL tại frame_num của beam device k
