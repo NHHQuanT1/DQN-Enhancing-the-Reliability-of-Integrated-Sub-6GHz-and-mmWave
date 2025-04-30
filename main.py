@@ -90,7 +90,7 @@ def compute_r(device_positions, h_base, allocation, frame): #tính giá trị v�
     r_sub = np.zeros(NUM_DEVICES)
     r_mW = np.zeros(NUM_DEVICES)
     h_base_sub = h_base[0]
-    num_of_beams_t = sum(1 for x in allocation[1] if x != -1) #tổng các phần từ khác trừ 1, hàm này sử dụng generator expression, với mỗi phần tử phù hợp ĐK sẽ lưu vào mảng giá trị =1 rồi tổng lại
+    num_of_beams_frame = sum(1 for x in allocation[1] if x != -1) #tổng các phần từ khác trừ 1, hàm này sử dụng generator expression, với mỗi phần tử phù hợp ĐK sẽ lưu vào mảng giá trị =1 rồi tổng lại
 
     # print(f"    h_base_sub: {h_base_sub}") 
     # h_base_mW = h_base[1]
@@ -111,7 +111,7 @@ def compute_r(device_positions, h_base, allocation, frame): #tính giá trị v�
         if(mW_beam_index != -1):
             h_mW_k = env.h_mW(device_positions, k, frame)
             # print(f"  h_mW: {h_mW_k:.4f}") 
-            r_mW[k] = (env.r_mW(h_mW_k, device_index=k))/num_of_beams_t
+            r_mW[k] = env.r_mW(h_mW_k, device_index=k, num_of_beams_t = num_of_beams_frame)
             # print(f"  mW Calculated Rate r_mW[k]: {r_mW[k]}")
 
         r.append(r_sub)

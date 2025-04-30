@@ -20,11 +20,11 @@ TARGET_UPDATE = 10  # Cập nhật mạng target mỗi 10 bước
 MEMORY_SIZE = 10000  # Kích thước bộ nhớ replay
 NUM_EPISODES = 1  # Số episode huấn luyện
 
-P_DBM = 5 #dbm
-# P_DBM  = pow(10, 5/10)*1e-3
+# P_DBM = 5 #dbm
+P_DBM  = pow(10, 5/10)*1e-3
 # P = pow(10, P_DBM/10) * 1e-3
-SIGMA = -169 #dbm
-# SIGMA = pow(10, -169/10)*1e-3
+# SIGMA = -169 #dbm/Hz
+SIGMA = pow(10, -169/10)*1e-3
 I_SUB = I_MW = 0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
@@ -116,27 +116,27 @@ def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0): #tr
     return h
 
 #Caculator SINR of sub-6GHz
-def sinr_sub(h, device_index):
+def compute_sinr_sub(h, device_index):
     power = h * P_DBM
     interference_plus_noise = I_SUB + W_SUB * SIGMA
     gamma_sub = power/interference_plus_noise
     return gamma_sub
 
 #Caculator SINR of mmWave
-def sinr_mW(h, device_index):
+def compute_sinr_mW(h, device_index, num_of_beams_t):
     power = h * P_DBM
-    interference_plus_noise = I_MW + W_MW * SIGMA
+    interference_plus_noise = I_MW + (W_MW / num_of_beams_t) * SIGMA
     gamma_mW = power/interference_plus_noise
     return gamma_mW
 
 #Caculator r_sub
-def r_sub(gamma_sub, device_index):
-    r_sub = W_SUB * np.log2(1 + sinr_sub(gamma_sub, device_index))
+def r_sub(h, device_index):
+    r_sub = W_SUB * np.log2(1 + compute_sinr_sub(h, device_index))
     return r_sub
 
 #Caculator r_mW
-def r_mW(gamma_mW, device_index):
-    r_mW = W_MW * np.log2(1 + sinr_mW(gamma_mW, device_index))
+def r_mW(h, device_index, num_of_beams_t):
+    r_mW = W_MW * np.log2(1 + compute_sinr_mW(h, device_index, num_of_beams_t)) / num_of_beams_t
     return r_mW
 
 #Caculator number of success packets device received
