@@ -318,8 +318,8 @@ def average_Q_table(Q_tables):
 def u(x):
     return -np.exp(BETA*x)
 
-#Creata compute risk averge Q_tables function
-def compute_risk_averse_Q(Q_tables, random_Q_index):
+#Creata compute risk averge Q_tables function (tính bảng Q rủi ro)
+def compute_risk_averse_Q(Q_tables, random_Q_index): 
     Q_random = Q_tables[random_Q_index].copy()
     Q_average = average_Q_table(Q_tables)
     sum_sqr = {}
@@ -327,12 +327,12 @@ def compute_risk_averse_Q(Q_tables, random_Q_index):
     for state in Q_average:
         for action in Q_average[state]:
             Q_average[state][action] = -Q_average[state][action]
-        minus_Q_average.update({state: Q_average[state].copy()})
+        minus_Q_average.update({state: Q_average[state].copy()}) #chuyển sang số đối của Q_average để tính Qi - Qavg 
     
     for i in range(I):
         sub = {}
         sub = sum_2_Q_tables(sub, Q_tables[i])
-        sub = sum_2_Q_tables(sub, minus_Q_average)
+        sub = sum_2_Q_tables(sub, minus_Q_average) #tổng phương sai
         for state in sub:
             for action in sub[state]:
                 sub[state][action] *= sub[state][action]
@@ -340,10 +340,11 @@ def compute_risk_averse_Q(Q_tables, random_Q_index):
     
     for state in sum_sqr:
         for action in sum_sqr[state]:
-            sum_sqr[state][action] = -sum_sqr[state][action]*LAMBDA_P/(I-1) #he so ne tranh rui ro
+            sum_sqr[state][action] = -(sum_sqr[state][action]*LAMBDA_P)/(I-1) #he so ne tranh rui ro
 
     res = sum_2_Q_tables({}, sum_sqr)
-    res = sum_2_Q_tables(res, Q_random)
+    # res = sum_2_Q_tables(res, Q_random)
+    res = sum_2_Q_tables(Q_random, res)
     return res
 
 def add_new_state_to_table(table, state):
