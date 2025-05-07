@@ -11,21 +11,17 @@ MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 NUM_ACTIONS = 3  # 3 hành động: 0 (Sub-6GHz), 1 (mmWave), 2 (cả hai)
 STATE_SIZE = NUM_DEVICES * 4  # State: [u_sub, u_mw, omega_sub, omega_mw] cho mỗi thiết bị
-BATCH_SIZE = 16
 GAMMA = 0.9  # Discount factor
 EPS_START = 0.5  # Khởi đầu epsilon
 EPS_END = 0.05  # Kết thúc epsilon
 EPS_DECAY = 0.995  # Decay factor
-TARGET_UPDATE = 10  # Cập nhật mạng target mỗi 10 bước
-MEMORY_SIZE = 10000  # Kích thước bộ nhớ replay
-NUM_EPISODES = 1  # Số episode huấn luyện
 
 # P_DBM = 5 #dbm
-P_DBM  = pow(10, 5/10)*1e-3
-# P = pow(10, P_DBM/10) * 1e-3
 # SIGMA = -169 #dbm/Hz
+# P = pow(10, P_DBM/10) * 1e-3
+P_DBM  = pow(10, 5/10)*1e-3
 SIGMA = pow(10, -169/10)*1e-3
-I_SUB = I_MW = 0
+I_SUB = I_MW = 0.0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
 T = 1e-3
@@ -67,17 +63,17 @@ list_of_devices = initialize_pos_of_devices()
 #Caculator Path loss
 #Path loss Sub_6GHz
 def path_loss_sub(d):
-    return 38.5 + 30*(np.log10(d* 1000))
+    return 38.5 + 30*(np.log10(d * 1000))
 #Los Path loss mmWave
 def los_path_loss_mW(d, frame):
     shadowing = LOS_PATH_LOSS[frame - 1]
     # shadowing = LOS_PATH_LOSS[frame]
-    return 61.4 + 20*(np.log10(d)) + shadowing
+    return 61.4 + 20*(np.log10(d * 1000)) + shadowing
 #NLos path loss mmWave
 def nlos_path_loss_mW(d, frame):
     shadowing = NLOS_PATH_LOSS[frame - 1]
     # shadowing = NLOS_PATH_LOSS[frame]
-    return 72 + 29.2*(np.log10(d)) + shadowing
+    return 72 + 29.2*(np.log10(d * 1000)) + shadowing
 
 #Gennerate coefficient h_base Raileigh 
 def gennerate_h_base(mean, sigma, size):
@@ -89,8 +85,8 @@ def gennerate_h_base(mean, sigma, size):
     return h_base #hệ số của phai mờ kênh Raileigh (đang là giá trị số phức)
 
 #Creat h for sub-6GHz each device within frame_t
-def h_sub(list_of_devices, device_index, h_base):
-    h = np.abs(h_base * pow(10, -path_loss_sub(distance_to_AP(list_of_devices[device_index]))/20.0))**2
+def h_sub(list_of_devices, device_index, h_base_sub):
+    h = np.abs(h_base_sub * pow(10, -path_loss_sub(distance_to_AP(list_of_devices[device_index]))/20.0))**2
     return h
 
 #Main transmit beam Gain G_b
@@ -102,17 +98,14 @@ def transmit_beam_gain(eta = 5*np.pi/180, beta = 0):
 #h for mmWave each device within frame_t
 def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0): #truyền vào vị trí các device, device k, frame
     #device blocked
-    if(device_index == 1):
+    if(device_index == 1 & device_index == 5):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame) # giá trị PL tại frame_num của beam device k
-        h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/20.0) * 0.1
-        # h = transmit_beam_gain(eta, beta) * 1 * path_loss * 0.1
+        h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/10.0) * 0.1 # G_Rx^k=epsilon
     
     #other devices
-    else:
+    else: # G_Rx^k = G_b
         path_loss = los_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame)
-        # h = np.abs(G * (h_base * pow(10, -path_loss/20)) * G)**2
-        h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/20.0) * transmit_beam_gain(eta, beta) # transmit_beam_gain(eta, beta) chinh la tinh gia tri G
-        # h = transmit_beam_gain(eta, beta) * 1 * path_loss * transmit_beam_gain(eta, beta) # transmit_beam_gain(eta, beta) chinh la tinh gia tri G
+        h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/10.0) * transmit_beam_gain(eta, beta) # transmit_beam_gain(eta, beta) chinh la tinh gia tri G
     return h
 
 #Caculator SINR of sub-6GHz
@@ -123,9 +116,9 @@ def compute_sinr_sub(h, device_index):
     return gamma_sub
 
 #Caculator SINR of mmWave
-def compute_sinr_mW(h, device_index, num_of_beams_t):
+def compute_sinr_mW(h, device_index):
     power = h * P_DBM
-    interference_plus_noise = I_MW + (W_MW / num_of_beams_t) * SIGMA
+    interference_plus_noise = I_MW + W_MW * SIGMA
     gamma_mW = power/interference_plus_noise
     return gamma_mW
 
@@ -135,8 +128,8 @@ def r_sub(h, device_index):
     return r_sub
 
 #Caculator r_mW
-def r_mW(h, device_index, num_of_beams_t):
-    r_mW = W_MW * np.log2(1 + compute_sinr_mW(h, device_index, num_of_beams_t)) / num_of_beams_t
+def r_mW(h, device_index):
+    r_mW = W_MW * np.log2(1 + compute_sinr_mW(h, device_index))
     return r_mW
 
 #Caculator number of success packets device received
@@ -145,7 +138,7 @@ def r_mW(h, device_index, num_of_beams_t):
 
 #Caculator packet loss rate (l_kv: so goi tin quyet dinh gui boi AP)
 def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
-    if(l_kv == 0):
+    if(l_kv == 0): #số gói tin gửi đi = 0
         packet_loss_rate = ((t-1)/t)*old_packet_loss_rate
         return packet_loss_rate
     elif(l_kv > 0):

@@ -9,6 +9,9 @@ NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
+EPS_START = 0.5  # Khởi đầu epsilon
+EPS_END = 0.05  # Kết thúc epsilon
+EPS_DECAY = 0.995  # Decay factor
 BETA = -0.5
 EPSILON = 0.5
 NUM_OF_FRAME = 10000
@@ -38,28 +41,44 @@ def initialize_action():
     return action
 
 def choose_action(state, Q_table):
-    #Epsilon-Greedy
+    # Epsilon-Greedy
     p = np.random.rand()
-    action = initialize_action()
-    if(p < EPSILON):
-        return action
-    else:
-        max_Q = -np.inf
-        state = tuple([tuple(row) for row in state]) #use search in Q_table
-        action = tuple(action)
-        random_action = []
-        for a in Q_table[state]:
-            if(Q_table[state][a] >= max_Q):
-                max_Q = Q_table[state][a]
-                action = a
-                if(max_Q == 0):
-                    random_action.append(action)
-        if(max_Q ==0):
-            action = random_action[np.random.randint(0, len(random_action))]
-
+    
+    # Chuyển đổi trạng thái sang định dạng tuple
+    state_tuple = tuple([tuple(row) for row in state])
+    
+    # Nếu trạng thái không có trong Q_table, thêm nó vào
+    if state_tuple not in Q_table:
+        add_new_state_to_table(Q_table, state)
+    
+    # Hành động ngẫu nhiên với xác suất epsilon
+    if p < EPSILON:
+        action = np.random.randint(0, 3, NUM_DEVICES)
         return action
     
-
+    # Nếu không, chọn hành động tốt nhất
+    else:
+        max_Q = -np.inf
+        best_action = tuple(np.random.randint(0, 3, NUM_DEVICES))  # Hành động mặc định
+        random_actions = []
+        
+        for a in Q_table[state_tuple]:
+            q_value = Q_table[state_tuple][a]
+            
+            if q_value > max_Q:
+                max_Q = q_value
+                best_action = a
+                random_actions = [a]  # Đặt lại danh sách chỉ với hành động này
+            elif q_value == max_Q:
+                random_actions.append(a)
+        
+        # Nếu tất cả giá trị Q bằng không, chọn ngẫu nhiên
+        if max_Q == 0 and random_actions:
+            best_action = random_actions[np.random.randint(0, len(random_actions))]
+        
+        # Chuyển đổi hành động tuple trở lại mảng numpy
+        return np.array(best_action)
+    
 #Create h for each frame (10000) of sub-6GHz,mmWave for each device
 def create_h_base(num_of_frame, mean = 0, sigma = 1):
     h_base = []
@@ -96,6 +115,7 @@ def compute_r(device_positions, h_base, allocation, frame): #tính giá trị v�
         mW_beam_index = allocation[1][k]
         # print(f"    sub_channel_index: {sub_channel_index:.4f}") 
         # print(f"    mW_beam_index: {mW_beam_index:.4f}") 
+
 
         if(sub_channel_index != -1):
             h_sub_k = env.h_sub(device_positions, k, h_base_sub[k, sub_channel_index])
@@ -181,8 +201,10 @@ def perform_action(action, l_sub_max, l_mW_max): # cac goi nay chinh la goi tin 
                 number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
                 number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS - number_of_packet[k, 1])
             else:
-                number_of_packet[k, 1] = MAX_PACKETS - 1
-                number_of_packet[k, 0] = 1
+                # number_of_packet[k, 1] = MAX_PACKETS
+                # number_of_packet[k, 0] = 0
+                number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
+                number_of_packet[k, 0] = MAX_PACKETS - 1
     return number_of_packet #quyet dinh so goi tin gui ti tu AP toi device
 
 # Xay dung ham nhan phan hoi ACK/NACK
@@ -195,7 +217,6 @@ def receive_feedback(packet_send, l_sub_max, l_mW_max): #l_sub_max, l_mW_max chi
 
         feedback[k, 0] = min(l_sub_k, l_sub_max[k])
         feedback[k, 1] = min(l_mW_k, l_mW_max[k])
-
         # feedback[k, 0] = l_sub_max[k]
         # feedback[k, 1] = l_mW_max[k]
     return feedback
@@ -215,26 +236,7 @@ def initialize_reward(state, action):
     reward = {}
     return reward
 
-#Update reward
-def update_reward(state, action, old_reward_table, num_of_send_packet, num_of_received_packet, frame_num):
-    state_action = np.insert(state, 4, action, axis=1)
-    state_action = tuple([tuple(row) for row in state_action])
-    old_reward_table = 0
-    if(state_action in old_reward_table):
-        old_reward_table = old_reward_table[state_action]
-    reward = compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_table, frame_num)
-    old_reward_table.update({state_action: reward})
-    return old_reward_table
-
 #Compute reward
-# def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
-#     sum = 0
-#     for k in range(NUM_DEVICES):
-#         state_k = state[k]
-#         sum = sum +((num_of_received_packet[k, 0] + num_of_received_packet[k, 1])/(
-#             num_of_send_packet[k, 0] + num_of_send_packet[k, 1])) - (1 - state_k[0]) - (1 - state_k[1])
-#     sum = ((frame_num - 1)*old_reward_value + sum)/frame_num
-#     return sum
 def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
     sum = 0
     for k in range(NUM_DEVICES):
@@ -254,10 +256,7 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
         plr_penalty_mW = (1 - state_k[1])  # Phạt = 1 nếu PLR mW tệ (state[1]=0)
 
         sum = sum + success_rate_k - plr_penalty_sub - plr_penalty_mW
-        # 'sum' bây giờ chứa điểm số tức thời của frame này
     reward = ((frame_num - 1) * old_reward_value + sum) / frame_num
-    # old_reward_value là giá trị trung bình được tính ở frame trước (frame_num - 1)
-
     return reward
 #######################
 #CREATE MODEL
@@ -272,26 +271,19 @@ def initialize_Q_tables(first_state):
     return Q_tables
 
 #create 2 Q_tables
-def sum_2_Q_tables(Q1, Q2): #tổng 2 state của 2 tables
+def sum_2_Q_tables(Q1, Q2):  # tổng 2 state của 2 tables
     q = Q1.copy()
     for state in Q2:
-        if(state in q): #nếu trạng thái đó đã có ở Q1
-            for a in q[state]:
-                q[state][a] += Q2[state][a] #cộng lại
+        if state in q:  # nếu trạng thái đó đã có ở Q1
+            for a in Q2[state]:  # Lặp qua các hành động trong Q2[state]
+                if a not in q[state]:  # Kiểm tra xem hành động có trong q[state] chưa
+                    q[state][a] = 0  # Nếu chưa, khởi tạo giá trị bằng 0
+                q[state][a] += Q2[state][a]  # Sau đó cộng lại
         else:
-            q.update({state: Q2[state].copy()}) #chưa có thì copy trạng thái từ Q2 sang
+            q.update({state: Q2[state].copy()})  # chưa có thì copy trạng thái từ Q2 sang
     return q
 
 #Create average Q table function
-# def average_Q_table(Q_tables):
-#     res = {}
-#     for state in range(len(Q_tables)):
-#         res = add_2_Q_tables(res, Q_tables[state])
-#     for state in res: 
-#         for action in res[state]:
-#             res[state][action] = res[state][action]/I
-#     return res
-
 def average_Q_table(Q_tables):
     res = {} #khởi tạo 1 dict rỗng
     for Q in Q_tables:
@@ -343,16 +335,8 @@ def compute_risk_averse_Q(Q_tables, random_Q_index):
 
 def add_new_state_to_table(table, state):
     state = tuple([tuple(row) for row in state])
-    actions = {}
-    for i in range(3):
-        a = np.empty(NUM_DEVICES)
-        a[0] = i 
-        for j in range(3):
-            a[1] = j
-            for k in range(3):
-                a[2] = k 
-                actions.update({tuple(a.copy()):0})
-        table.update({state: actions})
+    if state not in table:
+        table[state] = {}  # Khởi tạo với từ điển hành động rỗng
     return table
 
 COUNT = 0
@@ -362,36 +346,34 @@ def update_Q_table(Q_table, alpha, reward, state, action, next_state):
     action = tuple(action)
     next_state = tuple([tuple(row) for row in next_state])
 
-    #Find max(Q(s(t+1), a))
+    # Đảm bảo trạng thái tồn tại trong Q_table
+    if state not in Q_table:
+        Q_table[state] = {}
+    if next_state not in Q_table:
+        Q_table[next_state] = {}
+    
+    # Đảm bảo hành động tồn tại trong từ điển hành động của trạng thái
+    if action not in Q_table[state]:
+        Q_table[state][action] = 0
+    
+    # Tìm giá trị Q tối đa cho trạng thái tiếp theo
     max_Q = 0
-    for a in Q_table[state]:
-        if(Q_table[state][a] > max_Q):
-            max_Q = Q_table[state][a]
-    if(Q_table[state][action] != 0):
+    for a in Q_table[next_state]:
+        if Q_table[next_state][a] > max_Q:
+            max_Q = Q_table[next_state][a]
+    
+    # Theo dõi giá trị khác không bằng COUNT
+    if Q_table[state][action] != 0:
         global COUNT
         COUNT -= 1
+    
+    # Cập nhật giá trị Q
     Q_table[state][action] = Q_table[state][action] + alpha[state][action] * (u(reward + GAMMA * max_Q - Q_table[state][action]) - X0)
-    if(Q_table[state][action] != 0):
+    
+    if Q_table[state][action] != 0:
         COUNT += 1
+    
     return Q_table
-# def update_Q_table(Q_table, alpha, reward, state, action, next_state):
-#     # Chuyển state và next_state thành dạng tuple của tuples
-#     state = tuple([tuple(row) for row in state])
-#     next_state = tuple([tuple(row) for row in next_state])
-
-#     # Kiểm tra xem state đã tồn tại chưa
-#     if state not in Q_table:
-#         num_actions = len(Q_table[next(iter(Q_table))])  # Lấy số hành động từ một state bất kỳ
-#         Q_table[state] = np.zeros(3)
-    
-#     if next_state not in Q_table:
-#         Q_table[next_state] = np.zeros(3)
-    
-#     # Cập nhật Q-value
-#     Q_table[state][action] = (1 - alpha) * Q_table[state][action] + alpha * reward
-
-#     return Q_table
-
 
 #Khoi tao bang V
 def initialize_V(first_state):
@@ -405,12 +387,18 @@ def initialize_V(first_state):
 def update_V(V, state, action):
     state = tuple([tuple(row) for row in state])
     action = tuple(action)
-    if(state in V): #nếu cặp trạng thái - hành động đó đã có ở V tăng giá trị V[state][action] lên 1
-        V[state][action] += 1
-    else:
-        add_new_state_to_table(V, state)
-        V[state][action] = 1
-
+    
+    # Kiểm tra trạng thái có tồn tại trong V không
+    if state not in V:
+        V[state] = {}
+    
+    # Kiểm tra hành động có tồn tại cho trạng thái này không
+    if action not in V[state]:
+        V[state][action] = 0
+    
+    # Tăng số lần truy cập
+    V[state][action] += 1
+    
     return V
 
 #Khoi tao he so alpha
@@ -420,11 +408,19 @@ def initialize_alpha(first_state):
 def update_alpha(alpha, V, state, action):
     state = tuple([tuple(row) for row in state])
     action = tuple(action)
-    if(state in alpha): #giảm tỉ lệ học cặp trạng thái - hành động đó
-        alpha[state][action] = 1/V[state][action]
-    else:
-        add_new_state_to_table(alpha, state)
-        alpha[state][action] = 1/V[state][action]
+    
+    # Đảm bảo trạng thái tồn tại trong alpha
+    if state not in alpha:
+        alpha[state] = {}
+    
+    # Đảm bảo hành động tồn tại cho trạng thái này
+    if action not in alpha[state]:
+        alpha[state][action] = 1.0  # Giá trị mặc định
+    
+    # Cập nhật alpha dựa trên số lần truy cập
+    if state in V and action in V[state]:
+        alpha[state][action] = 1.0 / V[state][action]  # Tỷ lệ học giảm khi truy cập nhiều hơn
+    
     return alpha
 
 
@@ -482,8 +478,6 @@ for frame in range(1, NUM_OF_FRAME + 1):
     number_of_send_packet = perform_action(action, l_sub_max_estimate, l_mW_max_estimate)
     # number_of_sent_packet_plot.append(number_of_send_packet)
 
-    
-
     # Get feedback
     r = compute_r(device_positions, h_base_t, allocation, frame) #vận tốc tại device
     rate_plot.append(r) #giá trị vận tốc
@@ -510,17 +504,12 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # number_of_received_packet_plot.append(number_of_received_packet)
     average_r = compute_average_rate(average_r, r, frame) #tính toán giá trị vận tốc trung bình để ước lượng gói tin
     # Compute reward
-    # reward = update_reward(state, action, reward,number_of_send_packet, number_of_received_packet, frame)
     reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
-    # reward_value = compute_reward(plr_state, number_of_send_packet, number_of_received_packet,reward_value,frame)
-    # reward_plot.append(reward_value)
     next_state = update_state(state, packet_loss_rate, number_of_received_packet) #number_of_received_packet chính là feedback
     reward_plot.append(reward_value)
     # print(f"reward_plot {reward_plot}") # In reward của frame hiện tại
      # --- IN RA PHẦN THƯỞNG MỖI FRAME ---
     print(f"Frame {frame}: Reward = {reward_value}") # In reward của frame hiện tại
-    # print(f"Gia tri cua bien G: {env.G}")
-
     # Generate mask J
     J = np.random.poisson(1, I)
 
