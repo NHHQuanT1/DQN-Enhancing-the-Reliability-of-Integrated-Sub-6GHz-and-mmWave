@@ -36,6 +36,8 @@ LEARNING_RATE = 0.001
 STATE_SIZE = NUM_DEVICES * 4  # Mỗi thiết bị có 4 trạng thái
 ACTION_SIZE = 3 ** NUM_DEVICES  # 3 hành động cho mỗi thiết bị
 
+# Define PyTorch device
+device = torch.device("mps" if torch.cuda.is_available() else "cpu")
 # Replay Memory để lưu trữ các chuyển trạng thái (transitions)
 Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
@@ -216,8 +218,8 @@ def perform_action(action, l_sub_max, l_mW_max):
                 number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
                 number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS - number_of_packet[k, 1])
             else:
-                number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
-                number_of_packet[k, 0] = MAX_PACKETS - 1
+                number_of_packet[k, 1] = MAX_PACKETS - 1
+                number_of_packet[k, 0] = 1
     return number_of_packet
 
 def receive_feedback(packet_send, l_sub_max, l_mW_max):

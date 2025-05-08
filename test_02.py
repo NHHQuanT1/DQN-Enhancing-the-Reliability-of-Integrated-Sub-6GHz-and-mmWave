@@ -520,7 +520,7 @@ def main():
     #          packet_loss_rate_plot=packet_loss_rate_plot,
     #          rate_plot=rate_plot)
     
-    print(f"✅ Đã lưu kết quả vào file: {file_path}")
+    # print(f"✅ Đã lưu kết quả vào file: {file_path}")
 
 if __name__ == "__main__":
     main()

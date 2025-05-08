@@ -39,28 +39,6 @@ def update_state(state, plr, feedback): #update trạng thái so với PLR_MAX =
 def initialize_action():
     action = np.random.randint(0, 3, NUM_DEVICES)
     return action
-
-# def choose_action(state, Q_table):
-#     #Epsilon-Greedy
-#     p = np.random.rand()
-#     action = initialize_action()
-#     if(p < EPSILON):
-#         return action
-#     else:
-#         max_Q = -np.inf
-#         state = tuple([tuple(row) for row in state]) #use search in Q_table
-#         action = tuple(action)
-#         random_action = []
-#         for a in Q_table[state]:
-#             if(Q_table[state][a] >= max_Q):
-#                 max_Q = Q_table[state][a]
-#                 action = a
-#                 if(max_Q == 0):
-#                     random_action.append(action)
-#         if(max_Q ==0):
-#             action = random_action[np.random.randint(0, len(random_action))]
-
-#         return action
     
 def choose_action(state, Q_table):
     # Epsilon-Greedy
@@ -257,26 +235,7 @@ def initialize_reward(state, action):
     reward = {}
     return reward
 
-#Update reward
-def update_reward(state, action, old_reward_table, num_of_send_packet, num_of_received_packet, frame_num):
-    state_action = np.insert(state, 4, action, axis=1)
-    state_action = tuple([tuple(row) for row in state_action])
-    old_reward_table = 0
-    if(state_action in old_reward_table):
-        old_reward_table = old_reward_table[state_action]
-    reward = compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_table, frame_num)
-    old_reward_table.update({state_action: reward})
-    return old_reward_table
-
 #Compute reward
-# def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
-#     sum = 0
-#     for k in range(NUM_DEVICES):
-#         state_k = state[k]
-#         sum = sum +((num_of_received_packet[k, 0] + num_of_received_packet[k, 1])/(
-#             num_of_send_packet[k, 0] + num_of_send_packet[k, 1])) - (1 - state_k[0]) - (1 - state_k[1])
-#     sum = ((frame_num - 1)*old_reward_value + sum)/frame_num
-#     return sum
 def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
     sum = 0
     for k in range(NUM_DEVICES):
@@ -296,10 +255,7 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
         plr_penalty_mW = (1 - state_k[1])  # Phạt = 1 nếu PLR mW tệ (state[1]=0)
 
         sum = sum + success_rate_k - plr_penalty_sub - plr_penalty_mW
-        # 'sum' bây giờ chứa điểm số tức thời của frame này
     reward = ((frame_num - 1) * old_reward_value + sum) / frame_num
-    # old_reward_value là giá trị trung bình được tính ở frame trước (frame_num - 1)
-
     return reward
 #######################
 #CREATE MODEL
@@ -486,15 +442,6 @@ def update_V(V, state, action):
 def initialize_alpha(first_state):
     return initialize_V(first_state)
 
-# def update_alpha(alpha, V, state, action):
-#     state = tuple([tuple(row) for row in state])
-#     action = tuple(action)
-#     if(state in alpha): #giảm tỉ lệ học cặp trạng thái - hành động đó
-#         alpha[state][action] = 1/V[state][action]
-#     else:
-#         add_new_state_to_table(alpha, state)
-#         alpha[state][action] = 1/V[state][action]
-#     return alpha
 def update_alpha(alpha, V, state, action):
     state = tuple([tuple(row) for row in state])
     action = tuple(action)
@@ -568,20 +515,17 @@ for frame in range(1, NUM_OF_FRAME + 1):
     number_of_send_packet = perform_action(action, l_sub_max_estimate, l_mW_max_estimate)
     # number_of_sent_packet_plot.append(number_of_send_packet)
 
-    
-
     # Get feedback
     r = compute_r(device_positions, h_base_t, allocation, frame) #vận tốc tại device
     rate_plot.append(r) #giá trị vận tốc
-
-    print(f"Frame {frame}: Calculated Rate r at device = {r}")
+    # print(f"Frame {frame}: Calculated Rate r at device = {r}")
 
     l_max = l_kv_success(r) #gói tin nhận được thành công
-    print(f"Tong so goi tin nhan duoc thanh cong {l_max} tai frame {frame}")
+    # print(f"Tong so goi tin nhan duoc thanh cong {l_max} tai frame {frame}")
     l_sub_max = l_max[0]
-    print(f"So goi tin l_sub_max nhan duoc thanh cong {l_sub_max} tai frame {frame}")
+    # print(f"So goi tin l_sub_max nhan duoc thanh cong {l_sub_max} tai frame {frame}")
     l_mW_max = l_max[1]
-    print(f"So goi tin l_mW_max nhan duoc thanh cong {l_mW_max} tai frame {frame}")
+    # print(f"So goi tin l_mW_max nhan duoc thanh cong {l_mW_max} tai frame {frame}")
     # rate_plot.append(r)
 
     number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
@@ -596,12 +540,10 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # number_of_received_packet_plot.append(number_of_received_packet)
     average_r = compute_average_rate(average_r, r, frame) #tính toán giá trị vận tốc trung bình để ước lượng gói tin
     # Compute reward
-    # reward = update_reward(state, action, reward,number_of_send_packet, number_of_received_packet, frame)
-    reward_value = compute_reward(state,number_of_send_packet,number_of_received_packet,reward_value,frame)
-    # reward_value = compute_reward(plr_state, number_of_send_packet, number_of_received_packet,reward_value,frame)
-    # reward_plot.append(reward_value)
-    next_state = update_state(state, packet_loss_rate, number_of_received_packet) #number_of_received_packet chính là feedback
+    reward_value = compute_reward(state, number_of_send_packet, number_of_received_packet, reward_value, frame)
     reward_plot.append(reward_value)
+    # reward_value = compute_reward(plr_state, number_of_send_packet, number_of_received_packet,reward_value,frame)
+    next_state = update_state(state, packet_loss_rate, number_of_received_packet) #number_of_received_packet chính là feedback
     # print(f"reward_plot {reward_plot}") # In reward của frame hiện tại
      # --- IN RA PHẦN THƯỞNG MỖI FRAME ---
     print(f"Frame {frame}: Reward = {reward_value}") # In reward của frame hiện tại
