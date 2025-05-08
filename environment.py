@@ -12,10 +12,6 @@ PLR_MAX = 0.1  # Giới hạn PLR tối đa
 NUM_ACTIONS = 3  # 3 hành động: 0 (Sub-6GHz), 1 (mmWave), 2 (cả hai)
 STATE_SIZE = NUM_DEVICES * 4  # State: [u_sub, u_mw, omega_sub, omega_mw] cho mỗi thiết bị
 GAMMA = 0.9  # Discount factor
-EPS_START = 0.5  # Khởi đầu epsilon
-EPS_END = 0.05  # Kết thúc epsilon
-EPS_DECAY = 0.995  # Decay factor
-
 # P_DBM = 5 #dbm
 # SIGMA = -169 #dbm/Hz
 # P = pow(10, P_DBM/10) * 1e-3
@@ -25,7 +21,7 @@ I_SUB = I_MW = 0.0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
 T = 1e-3
-D = 40000
+D = 20000
 NUM_OF_FRAME = 10000
 LOS_PATH_LOSS = np.random.normal(0, 5.8, NUM_OF_FRAME)
 NLOS_PATH_LOSS = np.random.normal(0, 8.7, NUM_OF_FRAME)
@@ -52,9 +48,9 @@ def initialize_pos_of_devices():
             x = -60
             y = -60
         #position other devices
-        else: 
-            x = random.uniform(-80, 80)   
-            y = random.uniform(-80, 80)   
+        # else: 
+        #     x = random.uniform(-80, 80)   
+        #     y = random.uniform(-80, 80)   
         list_of_devices.append((x,y))        
     return list_of_devices
 

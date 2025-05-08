@@ -16,7 +16,7 @@ BETA = -0.5
 EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
-D = 40000
+D = 20000
 I = 2
 LAMBDA_P = 0.5
 LAMBDA = 0.995
@@ -223,10 +223,8 @@ def perform_action(action, l_sub_max, l_mW_max): # cac goi nay chinh la goi tin 
                 number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
                 number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS - number_of_packet[k, 1])
             else:
-                # number_of_packet[k, 1] = MAX_PACKETS
-                # number_of_packet[k, 0] = 0
-                number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
-                number_of_packet[k, 0] = MAX_PACKETS - 1
+                number_of_packet[k, 1] = MAX_PACKETS - 1
+                number_of_packet[k, 0] = 1
     return number_of_packet #quyet dinh so goi tin gui ti tu AP toi device
 
 # Xay dung ham nhan phan hoi ACK/NACK
@@ -316,15 +314,7 @@ def initialize_Q_tables(first_state):
     return Q_tables
 
 #create 2 Q_tables
-# def sum_2_Q_tables(Q1, Q2): #tổng 2 state của 2 tables
-#     q = Q1.copy()
-#     for state in Q2:
-#         if(state in q): #nếu trạng thái đó đã có ở Q1
-#             for a in q[state]:
-#                 q[state][a] += Q2[state][a] #cộng lại
-#         else:
-#             q.update({state: Q2[state].copy()}) #chưa có thì copy trạng thái từ Q2 sang
-#     return q
+
 def sum_2_Q_tables(Q1, Q2):  # tổng 2 state của 2 tables
     q = Q1.copy()
     for state in Q2:
@@ -396,23 +386,11 @@ def compute_risk_averse_Q(Q_tables, random_Q_index):
     res = sum_2_Q_tables(Q_random, res)
     return res
 
-# def add_new_state_to_table(table, state):
-#     state = tuple([tuple(row) for row in state])
-#     actions = {}
-#     for i in range(3):
-#         a = np.empty(NUM_DEVICES)
-#         a[0] = i 
-#         for j in range(3):
-#             a[1] = j
-#             for k in range(3):
-#                 a[2] = k 
-#                 actions.update({tuple(a.copy()):0})
-#         table.update({state: actions})
-#     return table
+
 def add_new_state_to_table(table, state):
     state = tuple([tuple(row) for row in state])
     if state not in table:
-        table[state] = {}  # Khởi tạo với từ điển hành động rỗng
+        table[state] = {}  # Khởi tạo với từ điển hành động rỗng, chỉ khởi tạo khi hành động cần
     return table
 
 COUNT = 0

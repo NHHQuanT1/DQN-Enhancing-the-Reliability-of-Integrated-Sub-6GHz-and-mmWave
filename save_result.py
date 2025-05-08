@@ -3,8 +3,7 @@ import pickle
 import main 
 import os
 
-
-save_dir = "results"  
+save_dir = "results"   #Tạo folder trước
 
 # Tạo tên file có thời gian để dễ phân biệt
 filename = f"training_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pkl"

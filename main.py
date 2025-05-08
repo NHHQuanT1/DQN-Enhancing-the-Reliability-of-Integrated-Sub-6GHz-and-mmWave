@@ -13,7 +13,7 @@ BETA = -0.5
 EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
-D = 40000
+D = 20000
 I = 2
 LAMBDA_P = 0.5
 LAMBDA = 0.995
@@ -243,7 +243,6 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
         numerator = num_of_received_packet[k, 0] + num_of_received_packet[k, 1]
         denominator = num_of_send_packet[k, 0] + num_of_send_packet[k, 1]
 
-        # !!! Vấn đề tiềm ẩn: Chia cho 0 !!!
         if denominator == 0:
              # Giả sử là 0.0 để phản ánh không có dữ liệu truyền đi.
              success_rate_k = 0.0
@@ -341,7 +340,7 @@ def compute_risk_averse_Q(Q_tables, random_Q_index):
     res = sum_2_Q_tables(Q_random, res)
     return res
 
-def add_new_state_to_table(table, state):
+def add_new_state_to_table(table, state): #Thêm trạng thái mới với tất cả hành động có thể (3^NUM_DEVICES), khởi tạo bằng 0
     state = tuple([tuple(row) for row in state])
     actions = {}
     for i in range(3):
@@ -364,9 +363,9 @@ def update_Q_table(Q_table, alpha, reward, state, action, next_state):
 
     #Find max(Q(s(t+1), a))
     max_Q = 0
-    for a in Q_table[state]:
-        if(Q_table[state][a] > max_Q):
-            max_Q = Q_table[state][a]
+    for a in Q_table[next_state]:
+        if(Q_table[next_state][a] > max_Q):
+            max_Q = Q_table[next_state][a]
     if(Q_table[state][action] != 0):
         global COUNT
         COUNT -= 1
@@ -374,24 +373,6 @@ def update_Q_table(Q_table, alpha, reward, state, action, next_state):
     if(Q_table[state][action] != 0):
         COUNT += 1
     return Q_table
-# def update_Q_table(Q_table, alpha, reward, state, action, next_state):
-#     # Chuyển state và next_state thành dạng tuple của tuples
-#     state = tuple([tuple(row) for row in state])
-#     next_state = tuple([tuple(row) for row in next_state])
-
-#     # Kiểm tra xem state đã tồn tại chưa
-#     if state not in Q_table:
-#         num_actions = len(Q_table[next(iter(Q_table))])  # Lấy số hành động từ một state bất kỳ
-#         Q_table[state] = np.zeros(3)
-    
-#     if next_state not in Q_table:
-#         Q_table[next_state] = np.zeros(3)
-    
-#     # Cập nhật Q-value
-#     Q_table[state][action] = (1 - alpha) * Q_table[state][action] + alpha * reward
-
-#     return Q_table
-
 
 #Khoi tao bang V
 def initialize_V(first_state):
