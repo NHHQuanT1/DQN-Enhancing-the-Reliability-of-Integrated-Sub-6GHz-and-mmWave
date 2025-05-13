@@ -402,6 +402,7 @@ def train():
     for frame in range(1, NUM_OF_FRAME + 1):
         # Random Q-network
         H = np.random.randint(0, I)
+        # risk_adverse_Q = compute_risk_averse_Q(Q_networks, H)
         
         # Decay epsilon for epsilon-greedy policy
         epsilon = max(EPS_END, epsilon * LAMBDA)

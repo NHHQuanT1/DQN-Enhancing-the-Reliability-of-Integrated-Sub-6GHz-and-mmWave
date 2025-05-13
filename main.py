@@ -13,7 +13,7 @@ BETA = -0.5
 EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
-D = 20000
+D = 8000
 I = 2
 LAMBDA_P = 0.5
 LAMBDA = 0.995
@@ -31,13 +31,13 @@ def update_state(state, plr, feedback): #update trạng thái so với PLR_MAX =
             elif(plr[k, i] > PLR_MAX):
                 next_state[k, i] = 0
             next_state[k, i+2] = feedback[k, i]
-    return next_state
+    return next_state 
 
 def initialize_action():
     action = np.random.randint(0, 3, NUM_DEVICES)
-    return action
+    return action #khởi tạo hành động cho mỗi thiết bị 
 
-def choose_action(state, Q_table):
+def choose_action(state, Q_table): #Q_table đây chính là risk_adverse_Q
     #Epsilon-Greedy
     p = np.random.rand()
     action = initialize_action()
@@ -53,9 +53,9 @@ def choose_action(state, Q_table):
                 max_Q = Q_table[state][a]
                 action = a
                 if(max_Q == 0):
-                    random_action.append(action)
+                    random_action.append(action) #nếu giá trị max_Q = 0 thêm vào list random_action
         if(max_Q ==0):
-            action = random_action[np.random.randint(0, len(random_action))]
+            action = random_action[np.random.randint(0, len(random_action))] #vẫn chưa tìm được max lấy ngẫu nhiên hành động 
 
         return action
     
@@ -63,13 +63,13 @@ def choose_action(state, Q_table):
 #Create h for each frame (10000) of sub-6GHz,mmWave for each device
 def create_h_base(num_of_frame, mean = 0, sigma = 1):
     h_base = []
-    h_base_sub = env.gennerate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_SUBCHANNELS)
-    h_base_mW = env.gennerate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_BEAMS)
+    h_base_sub = env.generate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_SUBCHANNELS)
+    h_base_mW = env.generate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_BEAMS)
 
     for frame in range(num_of_frame):
         h_base_sub_t = np.empty(shape=(NUM_DEVICES, NUM_SUBCHANNELS), dtype=complex)
-        for k in range(NUM_DEVICES):
-            for n in range(NUM_SUBCHANNELS):
+        for k in range(NUM_DEVICES): #thiết bị
+            for n in range(NUM_SUBCHANNELS): #trên sub nào của interface sub - 6GHz
                 h_base_sub_t[k, n] = h_base_sub[frame*NUM_DEVICES*NUM_SUBCHANNELS + k*NUM_SUBCHANNELS + n] #index của subchannel n của device k tại frame t
 
         h_base_mW_t = np.empty(shape=(NUM_DEVICES, NUM_BEAMS), dtype=complex)
@@ -77,7 +77,7 @@ def create_h_base(num_of_frame, mean = 0, sigma = 1):
             for n in range(NUM_BEAMS):
                 h_base_mW_t[k, n] = h_base_mW[frame*NUM_DEVICES*NUM_BEAMS + k*NUM_BEAMS + n]
         
-        h_base_t = [h_base_sub_t, h_base_mW_t]
+        h_base_t = [h_base_sub_t, h_base_mW_t] #trong bài toán không sử dụng h_base_mW_t
         h_base.append(h_base_t)
     return h_base #tạo ra các phai mơ kênh
     
@@ -118,7 +118,7 @@ def l_kv_success(r):
     return l_kv_success #sử dụng chung cho cả tính ước lượng và tính chính xác
 
 #Compute average rate
-def compute_average_rate(average_r, last_r, frame_num):
+def compute_average_rate(average_r, last_r, frame_num): #nếu tại tđ 0 thì average_r là giá trị đc khởi tạo
     avg_r = average_r.copy()
     for k in range(NUM_DEVICES):
         avg_r[0][k] = (last_r[0][k] + avg_r[0][k]*(frame_num - 1))/frame_num
@@ -216,15 +216,15 @@ def initialize_reward(state, action):
     return reward
 
 #Update reward
-def update_reward(state, action, old_reward_table, num_of_send_packet, num_of_received_packet, frame_num):
-    state_action = np.insert(state, 4, action, axis=1)
-    state_action = tuple([tuple(row) for row in state_action])
-    old_reward_table = 0
-    if(state_action in old_reward_table):
-        old_reward_table = old_reward_table[state_action]
-    reward = compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_table, frame_num)
-    old_reward_table.update({state_action: reward})
-    return old_reward_table
+# def update_reward(state, action, old_reward_table, num_of_send_packet, num_of_received_packet, frame_num):
+#     state_action = np.insert(state, 4, action, axis=1)
+#     state_action = tuple([tuple(row) for row in state_action])
+#     old_reward_table = 0
+#     if(state_action in old_reward_table):
+#         old_reward_table = old_reward_table[state_action]
+#     reward = compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_table, frame_num)
+#     old_reward_table.update({state_action: reward})
+#     return old_reward_table
 
 #Compute reward
 # def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
@@ -244,7 +244,6 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
         denominator = num_of_send_packet[k, 0] + num_of_send_packet[k, 1]
 
         if denominator == 0:
-             # Giả sử là 0.0 để phản ánh không có dữ liệu truyền đi.
              success_rate_k = 0.0
         else:
              success_rate_k = numerator / denominator
@@ -313,8 +312,8 @@ def u(x):
 
 #Creata compute risk averge Q_tables function (tính bảng Q rủi ro)
 def compute_risk_averse_Q(Q_tables, random_Q_index): 
-    Q_random = Q_tables[random_Q_index].copy()
-    Q_average = average_Q_table(Q_tables)
+    Q_random = Q_tables[random_Q_index].copy() # bảng Q_table lấy từ giá trị random H
+    Q_average = average_Q_table(Q_tables) #tính TB giá trị Q_tables
     sum_sqr = {}
     minus_Q_average = {}
     for state in Q_average:
@@ -329,7 +328,7 @@ def compute_risk_averse_Q(Q_tables, random_Q_index):
         for state in sub:
             for action in sub[state]:
                 sub[state][action] *= sub[state][action]
-        sum_sqr = sum_2_Q_tables(sum_sqr, sub)
+        sum_sqr = sum_2_Q_tables(sum_sqr, sub) #tổng được tất cả các hiệu bình phương
     
     for state in sum_sqr:
         for action in sum_sqr[state]:
@@ -363,9 +362,9 @@ def update_Q_table(Q_table, alpha, reward, state, action, next_state):
 
     #Find max(Q(s(t+1), a))
     max_Q = 0
-    for a in Q_table[next_state]:
-        if(Q_table[next_state][a] > max_Q):
-            max_Q = Q_table[next_state][a]
+    for a in Q_table[state]:
+        if(Q_table[state][a] > max_Q):
+            max_Q = Q_table[state][a]
     if(Q_table[state][action] != 0):
         global COUNT
         COUNT -= 1
@@ -375,7 +374,7 @@ def update_Q_table(Q_table, alpha, reward, state, action, next_state):
     return Q_table
 
 #Khoi tao bang V
-def initialize_V(first_state):
+def initialize_V(first_state): #khởi tạo bảng đếm số cặp state - action đã được lựa chọn trong quá trình học
     V_tables = []
     for i in range(I):
         V =  {}
@@ -424,8 +423,8 @@ packet_loss_rate = np.zeros(shape=(NUM_DEVICES, 2))
 
 
 #Generate h_base for each frame (100000)
-h_base = create_h_base(NUM_OF_FRAME + 1)
-h_base_t = h_base[0]
+h_base = create_h_base(NUM_OF_FRAME + 1) #tạo ra 10001 các trường hợp hệ số kênh cho h_base (cho 2 giao diện)
+h_base_t = h_base[0] #h_base được sinh ra tại thời điểm fram t = 0
 average_r = compute_r(device_positions, h_base_t, allocation=allocate(action),frame=1)
 
 # state_plot=[]
@@ -439,7 +438,7 @@ rate_plot=[] #giá trị vận tốc
 for frame in range(1, NUM_OF_FRAME + 1):
     # Random Q-table
     H = np.random.randint(0, I) #chọn ngẫu nhiên giá trị H từ 1 đến I (index Q = H-1)
-    risk_adverse_Q = compute_risk_averse_Q(Q_tables, H)
+    risk_adverse_Q = compute_risk_averse_Q(Q_tables, H) #tính Q^_table
 
     # Update EPSILON
     EPSILON = EPSILON * LAMBDA
@@ -453,7 +452,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
 
     # Select action
     action = choose_action(state, risk_adverse_Q)
-    allocation = allocate(action)
+    allocation = allocate(action) #phân bổ gói tin trên interface nào từ action trên
     # action_plot.append(action)
 
     # Perform action

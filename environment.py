@@ -21,7 +21,7 @@ I_SUB = I_MW = 0.0
 W_SUB = 1e8/NUM_SUBCHANNELS
 W_MW = 1e9
 T = 1e-3
-D = 20000
+D = 8000
 NUM_OF_FRAME = 10000
 LOS_PATH_LOSS = np.random.normal(0, 5.8, NUM_OF_FRAME)
 NLOS_PATH_LOSS = np.random.normal(0, 8.7, NUM_OF_FRAME)
@@ -48,9 +48,9 @@ def initialize_pos_of_devices():
             x = -60
             y = -60
         #position other devices
-        # else: 
-        #     x = random.uniform(-80, 80)   
-        #     y = random.uniform(-80, 80)   
+        else: 
+            x = random.uniform(-80, 80)   
+            y = random.uniform(-80, 80)   
         list_of_devices.append((x,y))        
     return list_of_devices
 
@@ -72,7 +72,7 @@ def nlos_path_loss_mW(d, frame):
     return 72 + 29.2*(np.log10(d * 1000)) + shadowing
 
 #Gennerate coefficient h_base Raileigh 
-def gennerate_h_base(mean, sigma, size):
+def generate_h_base(mean, sigma, size):
     re = np.random.normal(mean, sigma, size)
     im = np.random.normal(mean, sigma, size)
     h_base = []
@@ -88,13 +88,13 @@ def h_sub(list_of_devices, device_index, h_base_sub):
 #Main transmit beam Gain G_b
 def transmit_beam_gain(eta = 5*np.pi/180, beta = 0):
     epsilon = 0.1
-    G = ((2*np.pi - (2*np.pi - eta))*epsilon)/eta
+    G = (2*np.pi - (2*np.pi - eta)*epsilon)/eta
     return G
 
 #h for mmWave each device within frame_t
 def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0): #truyền vào vị trí các device, device k, frame
     #device blocked
-    if(device_index == 1 & device_index == 5):
+    if(device_index == 1 or device_index == 5):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame) # giá trị PL tại frame_num của beam device k
         h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/10.0) * 0.1 # G_Rx^k=epsilon
     
@@ -148,3 +148,5 @@ def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
 # h_base = gennerate_h_base(0,1,3)
 # h_sub_v = h_sub(device_positions,0,h_base[0])
 # print(h_sub_v)
+
+# print('vi tri cua device', list_of_devices[2] )

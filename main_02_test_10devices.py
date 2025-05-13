@@ -16,8 +16,8 @@ BETA = -0.5
 EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
-D = 20000
-I = 2
+D = 8000
+I = 4
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -82,8 +82,8 @@ def choose_action(state, Q_table):
 #Create h for each frame (10000) of sub-6GHz,mmWave for each device
 def create_h_base(num_of_frame, mean = 0, sigma = 1):
     h_base = []
-    h_base_sub = env.gennerate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_SUBCHANNELS)
-    h_base_mW = env.gennerate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_BEAMS)
+    h_base_sub = env.generate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_SUBCHANNELS)
+    h_base_mW = env.generate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_BEAMS)
 
     for frame in range(num_of_frame):
         h_base_sub_t = np.empty(shape=(NUM_DEVICES, NUM_SUBCHANNELS), dtype=complex)
@@ -98,14 +98,14 @@ def create_h_base(num_of_frame, mean = 0, sigma = 1):
         
         h_base_t = [h_base_sub_t, h_base_mW_t]
         h_base.append(h_base_t)
-    return h_base #tạo ra các phai mơ kênh
+    return h_base #tạo ra các hệ số phai mờ kênh tại frame thứ t cho 2 interface
     
 #Compute rate for each frame
-def compute_r(device_positions, h_base, allocation, frame): #tính giá trị vận tốc trên từng giao diện tại frame thứ t
+def compute_r(device_positions, h_base, allocation, frame): #tính giá trị vận tốc trên từng giao diện tại frame thứ t, giá trị h_base này phải là giá trị tại frame thứ t rồi
     r = []
     r_sub = np.zeros(NUM_DEVICES)
     r_mW = np.zeros(NUM_DEVICES)
-    h_base_sub = h_base[0]
+    h_base_sub = h_base[0] #truy vấn đến giá trị của sub-6Ghz tại index = 0
     # print(f"    h_base_sub: {h_base_sub}") 
     # h_base_mW = h_base[1]
     # print(f"    h_base_mW: {h_base_mW}") 
@@ -315,8 +315,17 @@ def u(x):
 
 #Creata compute risk averge Q_tables function (tính bảng Q rủi ro)
 def compute_risk_averse_Q(Q_tables, random_Q_index): 
-    Q_random = Q_tables[random_Q_index].copy()
-    Q_average = average_Q_table(Q_tables)
+    """
+    Tính bảng Q trung bình từ danh sách các bảng Q.
+    
+    Args:
+        Q_tables (list): Danh sách các bảng Q, mỗi bảng là dict {state: {action: Q_value}}.
+    
+    Returns:
+        dict: Bảng Q trung bình, với Q_value là trung bình của các bảng Q.
+    """
+    Q_random = Q_tables[random_Q_index].copy() # bảng Q_table lấy từ giá trị random H
+    Q_average = average_Q_table(Q_tables) #tính TB giá trị Q_tables
     sum_sqr = {}
     minus_Q_average = {}
     for state in Q_average:
@@ -331,7 +340,7 @@ def compute_risk_averse_Q(Q_tables, random_Q_index):
         for state in sub:
             for action in sub[state]:
                 sub[state][action] *= sub[state][action]
-        sum_sqr = sum_2_Q_tables(sum_sqr, sub)
+        sum_sqr = sum_2_Q_tables(sum_sqr, sub) #tổng được tất cả các hiệu bình phương
     
     for state in sum_sqr:
         for action in sum_sqr[state]:
@@ -368,40 +377,76 @@ COUNT = 0
 #     if(Q_table[state][action] != 0):
 #         COUNT += 1
 #     return Q_table
+# def update_Q_table(Q_table, alpha, reward, state, action, next_state):
+#     state = tuple([tuple(row) for row in state])
+#     action = tuple(action)
+#     next_state = tuple([tuple(row) for row in next_state])
+
+#     # Đảm bảo trạng thái tồn tại trong Q_table
+#     if state not in Q_table:
+#         Q_table[state] = {}
+#     if next_state not in Q_table:
+#         Q_table[next_state] = {}
+    
+#     # Đảm bảo hành động tồn tại trong từ điển hành động của trạng thái
+#     if action not in Q_table[state]:
+#         Q_table[state][action] = 0
+    
+#     # Tìm giá trị Q tối đa cho trạng thái tiếp theo
+#     max_Q = 0
+#     for a in Q_table[next_state]:
+#         if Q_table[next_state][a] > max_Q:
+#             max_Q = Q_table[next_state][a]
+    
+#     # Theo dõi giá trị khác không bằng COUNT
+#     if Q_table[state][action] != 0:
+#         global COUNT
+#         COUNT -= 1
+    
+#     # Cập nhật giá trị Q
+#     Q_table[state][action] = Q_table[state][action] + alpha[state][action] * (u(reward + GAMMA * max_Q - Q_table[state][action]) - X0)
+    
+#     if Q_table[state][action] != 0:
+#         COUNT += 1
+    
+#     return Q_table
+#update 13/05
+
 def update_Q_table(Q_table, alpha, reward, state, action, next_state):
+    # Chuyển đổi state và action sang dạng tuple để dùng làm keys trong dictionary
     state = tuple([tuple(row) for row in state])
     action = tuple(action)
     next_state = tuple([tuple(row) for row in next_state])
 
-    # Đảm bảo trạng thái tồn tại trong Q_table
+    # Đảm bảo state và next_state đã tồn tại trong Q_table
     if state not in Q_table:
         Q_table[state] = {}
     if next_state not in Q_table:
         Q_table[next_state] = {}
     
-    # Đảm bảo hành động tồn tại trong từ điển hành động của trạng thái
+    # Đảm bảo action đã tồn tại trong Q_table[state]
     if action not in Q_table[state]:
-        Q_table[state][action] = 0
+        Q_table[state][action] = 0.0
+
+    # Tìm max_a Q(s(t+1), a) - giá trị Q tối đa cho trạng thái tiếp theo
+    max_Q = 0.0
+    if next_state in Q_table:
+        if Q_table[next_state]:  # Nếu đã có bất kỳ action nào trong trạng thái kế tiếp
+            max_Q = max(Q_table[next_state].values())  # Lấy giá trị Q tối đa từ tất cả các actions
     
-    # Tìm giá trị Q tối đa cho trạng thái tiếp theo
-    max_Q = 0
-    for a in Q_table[next_state]:
-        if Q_table[next_state][a] > max_Q:
-            max_Q = Q_table[next_state][a]
+    # Tính toán TD error: r(s(t), a(t)) + γ * max_a Q(s(t+1), a) - Q(s(t), a(t))
+    td_error = reward + GAMMA * max_Q - Q_table[state][action]
     
-    # Theo dõi giá trị khác không bằng COUNT
-    if Q_table[state][action] != 0:
-        global COUNT
-        COUNT -= 1
+    # Áp dụng công thức cập nhật Q-value
+    # Q(s(t), a(t)) = Q(s(t), a(t)) + α(s(t), a(t)) * [u(TD error) - x_0]
+    Q_table[state][action] += alpha[state][action] * (u(td_error) - X0)
     
-    # Cập nhật giá trị Q
-    Q_table[state][action] = Q_table[state][action] + alpha[state][action] * (u(reward + GAMMA * max_Q - Q_table[state][action]) - X0)
-    
+    # Theo dõi các giá trị Q khác 0 (tùy chọn)
+    global COUNT
     if Q_table[state][action] != 0:
         COUNT += 1
     
     return Q_table
-
 #Khoi tao bang V
 def initialize_V(first_state):
     V_tables = []
@@ -429,8 +474,8 @@ def update_V(V, state, action):
     if state not in V:
         V[state] = {}
     
-    # Kiểm tra hành động có tồn tại cho trạng thái này không
-    if action not in V[state]:
+    # Kiểm tra hành động có tồn tại cho trạng thái này không, khởi tạo giá trị bằng 0
+    if action not in V[state]: 
         V[state][action] = 0
     
     # Tăng số lần truy cập
@@ -477,7 +522,7 @@ packet_loss_rate = np.zeros(shape=(NUM_DEVICES, 2))
 
 #Generate h_base for each frame (100000)
 h_base = create_h_base(NUM_OF_FRAME + 1)
-h_base_t = h_base[0]
+h_base_t = h_base[0] #khởi tạo tại frame thứ 0
 average_r = compute_r(device_positions, h_base_t, allocation=allocate(action),frame=1)
 
 # state_plot=[]
@@ -509,7 +554,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # action_plot.append(action)
 
     # Perform action
-    l_max_estimate = l_kv_success(average_r) #sử dụng hàm tính toán gói tin nhận được --> ước lượng gói tin gửi đi từ AP
+    l_max_estimate = l_kv_success(average_r) #sử dụng hàm tính toán gói tin có thể nhận được --> ước lượng gói tin gửi đi từ AP
     l_sub_max_estimate = l_max_estimate[0]
     l_mW_max_estimate = l_max_estimate[1]
     number_of_send_packet = perform_action(action, l_sub_max_estimate, l_mW_max_estimate)
