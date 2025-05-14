@@ -149,4 +149,4 @@ def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
 # h_sub_v = h_sub(device_positions,0,h_base[0])
 # print(h_sub_v)
 
-# print('vi tri cua device', list_of_devices[2] )
+print('vi tri cua device', list_of_devices)
