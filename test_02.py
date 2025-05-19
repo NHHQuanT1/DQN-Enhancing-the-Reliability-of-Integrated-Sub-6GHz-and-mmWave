@@ -9,9 +9,9 @@ import random
 from collections import defaultdict
 
 # Hyperparameters
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -44,8 +44,8 @@ def u(x):
 def action_to_index(action):
     """Chuyển action từ array sang index"""
     index = 0
-    for i, a in enumerate(action):
-        index += int(a) * (3 ** i)
+    for i, a in enumerate(action): #duyệt qua phần tử a của action ứng với chỉ số i, tức giá trị a[i] trong action truyền vào
+        index += int(a) * (3 ** i) #index = a + 3^i
     return index
 
 def index_to_action(index):
@@ -75,23 +75,23 @@ class QNetwork(nn.Module):
         """
         # Chuyển state thành tensor và làm phẳng
         if not isinstance(state, torch.Tensor):
-            state = torch.FloatTensor(state.flatten()).unsqueeze(0)
+            state = torch.FloatTensor(state.flatten()).unsqueeze(0) #thêm một chiều 
         
-        x = F.relu(self.fc1(state))
+        x = F.relu(self.fc1(state)) #lan truyền thuận bằng hàm ReLu
         x = F.relu(self.fc2(x))
         return self.fc3(x)
     
     def get_q_value(self, state, action):
-        """Lấy Q-value cho một action cụ thể"""
-        with torch.no_grad():
-            q_values = self(state)
+        """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
+        with torch.no_grad(): #tắt tính toán gradient cho dự đoán
+            q_values = self(state) #bản chất  self.__call__(input)
             action_idx = action_to_index(action)
-            return q_values[0, action_idx].item()
+            return q_values[0, action_idx].item() #
 
 # ===== Hàm xử lý bảng V và alpha =====
 def initialize_V():
     """Khởi tạo I bảng V cho các cặp (state, action)"""
-    V_tables = [{} for _ in range(I)]
+    V_tables = [{} for _ in range(I)] #tạo các từ điển rỗng
     return V_tables
 
 def update_V(V, state, action):
@@ -109,7 +109,7 @@ def initialize_alpha():
 def update_alpha(alpha, V, state, action):
     """Cập nhật bảng alpha - learning rate giảm theo số lần truy cập"""
     key = state_action_to_key(state, action)
-    alpha[key] = 1.0 / V[key] if key in V and V[key] > 0 else 1.0
+    alpha[key] = 1.0 / V[key] if key in V and V[key] > 0 else 1.0 #anpha = 1 nếu chưa truy cập
     return alpha
 
 # ===== Lớp quản lý Q Networks với bảng V và alpha =====
@@ -121,7 +121,7 @@ class QNetworkManager:
         
         for _ in range(I):
             network = QNetwork()
-            optimizer = optim.Adam(network.parameters(), lr=0.001)
+            optimizer = optim.Adam(network.parameters(), lr=0.001) #tạo bộ tối ưu hoá cho mạng
             self.q_networks.append(network)
             self.optimizers.append(optimizer)
         
@@ -131,7 +131,7 @@ class QNetworkManager:
     
     def update_v_alpha(self, network_idx, state, action):
         """Cập nhật bảng V và alpha cho cặp (state, action)"""
-        self.V[network_idx] = update_V(self.V[network_idx], state, action)
+        self.V[network_idx] = update_V(self.V[network_idx], state, action) #cập nhật bảng V ứng với network tương ứng
         self.alpha[network_idx] = update_alpha(
             self.alpha[network_idx], 
             self.V[network_idx], 
@@ -145,14 +145,14 @@ class QNetworkManager:
         Q̂(s,a) = Q_H(s,a) - λ_p * sqrt(Var[Q(s,a)])
         """
         # Chuyển state thành tensor
-        state_tensor = torch.FloatTensor(state.flatten()).unsqueeze(0)
+        state_tensor = torch.FloatTensor(state.flatten()).unsqueeze(0) #làm phẳng trạng thái và thêm 1 chiều vào
         
         # Lấy Q-values từ mạng được chọn ngẫu nhiên H
         with torch.no_grad():
             q_random = self.q_networks[random_idx](state_tensor)
         
         # Tính Q-values trung bình từ tất cả mạng
-        q_avg = torch.zeros_like(q_random)
+        q_avg = torch.zeros_like(q_random) #Tạo tensor zeros có cùng kích thước với q_random
         for i in range(I):
             with torch.no_grad():
                 q_avg += self.q_networks[i](state_tensor)
@@ -177,7 +177,7 @@ class QNetworkManager:
             return np.random.randint(0, 3, NUM_DEVICES)
         
         # Chọn ngẫu nhiên một Q-network
-        random_idx = random.randint(0, I - 1)
+        random_idx = random.randint(0, I - 1) #giá trị này bao gồm từ 0 đến I -1
         
         # Tính Q risk-averse cho tất cả action
         risk_averse_q = self.compute_risk_averse_Q(random_idx, state)
@@ -205,7 +205,7 @@ class QNetworkManager:
         # 4. Tính Q-values hiện tại
         q_values = network(state_tensor)
         action_idx = action_to_index(action)
-        current_q = q_values[0, action_idx]
+        current_q = q_values[0, action_idx] #Lấy hàng đầu tiên (và duy nhất) của tensor, kết quả là tensor 1D [27], chứa 27 Q-values.
         
         # 5. Tính max Q-value cho next state
         with torch.no_grad():
@@ -228,7 +228,7 @@ class QNetworkManager:
         
         # 10. Tính loss và cập nhật network
         # Chỉ tính loss cho action được chọn
-        loss = F.mse_loss(q_values[0, action_idx:action_idx+1], target_q_values[0, action_idx:action_idx+1])
+        loss = F.mse_loss(q_values[0, action_idx:action_idx+1], target_q_values[0, action_idx:action_idx+1]) #tính loss dựa từ tensor (kỹ thuật slicing)
         
         optimizer.zero_grad()
         loss.backward()

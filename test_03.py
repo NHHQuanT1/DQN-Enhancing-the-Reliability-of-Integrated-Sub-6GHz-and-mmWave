@@ -23,7 +23,7 @@ EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 4  # Số lượng Q-network
+I = 2  # Số lượng Q-network
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -31,21 +31,21 @@ X0 = 1
 # Chuyển state, action thành key
 def state_action_to_key(state, action):
     """Chuyển state và action thành key để lưu trong dictionary"""
-    state_key = tuple(map(tuple, state))
-    action_key = tuple(action) if isinstance(action, np.ndarray) else tuple(action)
+    state_key = tuple(map(tuple, state)) # chuyển từng hàng thành 1 tuple, sau đó chuyển thành tuple lồng tuple
+    action_key = tuple(action) if isinstance(action, np.ndarray) else tuple(action) # kiểm tra xem có phải array hay danh sách (python) để chuyển về tuple cả
     return (state_key, action_key)
 
 # Hàm utility
 def u(x):
-    """Hàm utility theo công thức trong paper"""
+    """Hàm utility"""
     return -np.exp(BETA * x)
 
 # Mã hóa action thành index và ngược lại
 def action_to_index(action):
     """Chuyển action từ array sang index"""
     index = 0
-    for i, a in enumerate(action): #duyệt qua phần tử a của action ứng với chỉ số i, tức giá trị a[i] trong action truyền vào
-        index += int(a) * (3 ** i) #index = a + 3^i
+    for i, a in enumerate(action): # Duyệt qua phần tử a của action ứng với chỉ số i, tức giá trị a[i] trong action truyền vào
+        index += int(a) * (3 ** i) # index = a + 3^i
     return index
 
 def index_to_action(index):
@@ -86,7 +86,7 @@ class QNetwork(nn.Module):
         with torch.no_grad(): #tắt tính toán gradient cho dự đoán
             q_values = self(state) #bản chất  self.__call__(input)
             action_idx = action_to_index(action)
-            return q_values[0, action_idx].item() #
+            return q_values[0, action_idx].item() 
 
 # ===== Hàm xử lý bảng V và alpha =====
 def initialize_V():
@@ -109,7 +109,7 @@ def initialize_alpha():
 def update_alpha(alpha, V, state, action):
     """Cập nhật bảng alpha - learning rate giảm theo số lần truy cập"""
     key = state_action_to_key(state, action)
-    alpha[key] = 1.0 / V[key] if key in V and V[key] > 0 else 1.0 #anpha = 1 nếu chưa truy cập
+    alpha[key] = 1.0 / V[key] if key in V and V[key] > 0 else 1.0 # anpha = 1 nếu chưa truy cập
     return alpha
 
 # ===== Lớp quản lý Q Networks với bảng V và alpha =====

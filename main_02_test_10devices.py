@@ -17,7 +17,7 @@ EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 2
+I = 4
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -40,7 +40,7 @@ def initialize_action():
     action = np.random.randint(0, 3, NUM_DEVICES)
     return action
     
-def choose_action(state, Q_table):
+def choose_action(state, Q_table): #chọn dựa giá trị của avg_risk_Q_tables
     # Epsilon-Greedy
     p = np.random.rand()
     
@@ -360,58 +360,6 @@ def add_new_state_to_table(table, state):
 
 COUNT = 0
 # Create update Q_table function
-# def update_Q_table(Q_table, alpha, reward, state, action, next_state):
-#     state = tuple([tuple(row) for row in state])
-#     action = tuple(action)
-#     next_state = tuple([tuple(row) for row in next_state])
-
-#     #Find max(Q(s(t+1), a))
-#     max_Q = 0
-#     for a in Q_table[state]:
-#         if(Q_table[state][a] > max_Q):
-#             max_Q = Q_table[state][a]
-#     if(Q_table[state][action] != 0):
-#         global COUNT
-#         COUNT -= 1
-#     Q_table[state][action] = Q_table[state][action] + alpha[state][action] * (u(reward + GAMMA * max_Q - Q_table[state][action]) - X0)
-#     if(Q_table[state][action] != 0):
-#         COUNT += 1
-#     return Q_table
-# def update_Q_table(Q_table, alpha, reward, state, action, next_state):
-#     state = tuple([tuple(row) for row in state])
-#     action = tuple(action)
-#     next_state = tuple([tuple(row) for row in next_state])
-
-#     # Đảm bảo trạng thái tồn tại trong Q_table
-#     if state not in Q_table:
-#         Q_table[state] = {}
-#     if next_state not in Q_table:
-#         Q_table[next_state] = {}
-    
-#     # Đảm bảo hành động tồn tại trong từ điển hành động của trạng thái
-#     if action not in Q_table[state]:
-#         Q_table[state][action] = 0
-    
-#     # Tìm giá trị Q tối đa cho trạng thái tiếp theo
-#     max_Q = 0
-#     for a in Q_table[next_state]:
-#         if Q_table[next_state][a] > max_Q:
-#             max_Q = Q_table[next_state][a]
-    
-#     # Theo dõi giá trị khác không bằng COUNT
-#     if Q_table[state][action] != 0:
-#         global COUNT
-#         COUNT -= 1
-    
-#     # Cập nhật giá trị Q
-#     Q_table[state][action] = Q_table[state][action] + alpha[state][action] * (u(reward + GAMMA * max_Q - Q_table[state][action]) - X0)
-    
-#     if Q_table[state][action] != 0:
-#         COUNT += 1
-    
-#     return Q_table
-#update 13/05
-
 def update_Q_table(Q_table, alpha, reward, state, action, next_state):
     # Chuyển đổi state và action sang dạng tuple để dùng làm keys trong dictionary
     state = tuple([tuple(row) for row in state])
