@@ -14,39 +14,76 @@ NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
 NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
-GAMMA = 0.99  # Discount factor tăng lên để quan tâm nhiều hơn đến phần thưởng tương lai
+GAMMA = 0.9  # Discount factor
 EPS_START = 0.5  # Khởi đầu epsilon
 EPS_END = 0.05  # Kết thúc epsilon
-EPS_DECAY = 0.998  # Decay factor tăng lên để khai thác lâu hơn
+EPS_DECAY = 0.995  # Decay factor
 BETA = -0.5
 EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 4  # Số lượng Q-network
-LAMBDA_P = 0.7  # Tăng tham số điều chỉnh rủi ro
-LAMBDA = 0.998  # Điều chỉnh để epsilon giảm chậm hơn
+I = 2  # Số lượng Q-network
+LAMBDA_P = 0.5
+LAMBDA = 0.995
 X0 = 1
-BATCH_SIZE = 64  # Kích thước batch cho Experience Replay
-BUFFER_SIZE = 10000  # Kích thước của Replay Buffer
-TAU = 0.001  # Soft update param cho target network
-UPDATE_EVERY = 4  # Cập nhật target network mỗi 4 bước
-REWARD_SCALING = 1.5  # Hệ số tỷ lệ phần thưởng
 
-# Class Experience Replay Buffer
+# Tham số mới cho Replay Buffer
+REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
+BATCH_SIZE = 32               # Kích thước batch để học
+MIN_REPLAY_SIZE = 1000        # Kích thước tối thiểu để bắt đầu học
+
+# ===== Định nghĩa lớp ReplayBuffer =====
 class ReplayBuffer:
-    def __init__(self, capacity=BUFFER_SIZE):
-        self.buffer = deque(maxlen=capacity)
-        
-    def push(self, state, action, reward, next_state):
-        self.buffer.append((state, action, reward, next_state))
-        
+    def __init__(self, buffer_size):
+        """Khởi tạo buffer với kích thước cho trước"""
+        self.buffer = deque(maxlen=buffer_size)
+    
+    def add(self, state, action, reward, next_state):
+        """
+        Thêm một mẫu trải nghiệm vào buffer
+        state: trạng thái hiện tại
+        action: hành động được thực hiện
+        reward: phần thưởng nhận được
+        next_state: trạng thái tiếp theo
+        """
+        experience = (state, action, reward, next_state)
+        self.buffer.append(experience)
+    
     def sample(self, batch_size):
-        if len(self) < batch_size:
-            batch_size = len(self)
-        return random.sample(self.buffer, batch_size)
+        """
+        Lấy mẫu ngẫu nhiên một batch từ buffer
+        Trả về tuple (states, actions, rewards, next_states)
+        """
+        # Đảm bảo batch_size không lớn hơn kích thước hiện tại của buffer
+        batch_size = min(batch_size, len(self.buffer))
+        
+        # Lấy mẫu ngẫu nhiên các chỉ số
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
+        
+        # Lấy dữ liệu từ các chỉ số đã chọn
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        
+        for idx in indices:
+            state, action, reward, next_state = self.buffer[idx]
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+        
+        # Chuyển sang numpy array để dễ xử lý
+        return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards),
+            np.array(next_states)
+        )
     
     def __len__(self):
+        """Trả về kích thước hiện tại của buffer"""
         return len(self.buffer)
 
 # Chuyển state, action thành key
@@ -77,32 +114,19 @@ def index_to_action(index):
         index = index // 3
     return action
 
-# ===== Định nghĩa kiến trúc mạng neural network cải tiến =====
+# ===== Định nghĩa kiến trúc mạng neural network mới =====
 class QNetwork(nn.Module):
     def __init__(self):
         super(QNetwork, self).__init__()
         self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
         self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
         
-        # Xây dựng mạng neural với kiến trúc lớn hơn
-        self.fc1 = nn.Linear(self.state_dim, 256)
-        self.bn1 = nn.BatchNorm1d(256)  # Thêm batch normalization
-        self.fc2 = nn.Linear(256, 128)
-        self.bn2 = nn.BatchNorm1d(128)
-        self.fc3 = nn.Linear(128, 64)
-        self.bn3 = nn.BatchNorm1d(64)
-        self.fc4 = nn.Linear(64, self.action_size)
+        # Xây dựng mạng neural
+        self.fc1 = nn.Linear(self.state_dim, 128)
+        self.fc2 = nn.Linear(128, 64)
+        # Đầu ra có kích thước bằng số lượng action có thể
+        self.fc3 = nn.Linear(64, self.action_size)
         
-        # Khởi tạo trọng số
-        self._initialize_weights()
-        
-    def _initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='leaky_relu')
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
-                    
     def forward(self, state):
         """
         Nhận đầu vào là state, trả về Q-values cho tất cả action khả thi
@@ -111,11 +135,9 @@ class QNetwork(nn.Module):
         if not isinstance(state, torch.Tensor):
             state = torch.FloatTensor(state.flatten()).unsqueeze(0) #thêm một chiều 
         
-        # Forward pass với batch normalization và LeakyReLU
-        x = F.leaky_relu(self.bn1(self.fc1(state)) if state.size(0) > 1 else self.fc1(state))
-        x = F.leaky_relu(self.bn2(self.fc2(x)) if state.size(0) > 1 else self.fc2(x))
-        x = F.leaky_relu(self.bn3(self.fc3(x)) if state.size(0) > 1 else self.fc3(x))
-        return self.fc4(x)
+        x = F.relu(self.fc1(state)) #lan truyền thuận bằng hàm ReLu
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
     
     def get_q_value(self, state, action):
         """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
@@ -145,41 +167,28 @@ def initialize_alpha():
 def update_alpha(alpha, V, state, action):
     """Cập nhật bảng alpha - learning rate giảm theo số lần truy cập"""
     key = state_action_to_key(state, action)
-    # Cập nhật alpha với decay chậm hơn
-    alpha[key] = 1.0 / (V[key]**0.5) if key in V and V[key] > 0 else 1.0 # anpha = 1 nếu chưa truy cập
+    alpha[key] = 1.0 / V[key] if key in V and V[key] > 0 else 1.0 # anpha = 1 nếu chưa truy cập
     return alpha
 
-# ===== Lớp quản lý Q Networks với bảng V và alpha, target network và experience replay =====
+# ===== Lớp quản lý Q Networks với bảng V và alpha =====
 class QNetworkManager:
     def __init__(self):
-        # Khởi tạo I mạng neural network và target networks
+        # Khởi tạo I mạng neural network
         self.q_networks = []
-        self.target_networks = []
         self.optimizers = []
-        self.replay_buffers = []
-        self.t_steps = 0
         
         for _ in range(I):
-            # Khởi tạo mạng chính
             network = QNetwork()
-            optimizer = optim.Adam(network.parameters(), lr=0.001) #tạo bộ tối ưu hoá cho mạng
-            
-            # Khởi tạo target network
-            target_network = QNetwork()
-            target_network.load_state_dict(network.state_dict())
-            target_network.eval()  # Đặt ở chế độ evaluation
-            
-            # Khởi tạo replay buffer
-            replay_buffer = ReplayBuffer()
-            
+            optimizer = optim.Adam(network.parameters(), lr=0.005) #tạo bộ tối ưu hoá cho mạng
             self.q_networks.append(network)
-            self.target_networks.append(target_network)
             self.optimizers.append(optimizer)
-            self.replay_buffers.append(replay_buffer)
         
         # Khởi tạo bảng V và alpha
         self.V = initialize_V()
         self.alpha = initialize_alpha()
+        
+        # Khởi tạo Replay Buffer cho từng mạng
+        self.replay_buffers = [ReplayBuffer(REPLAY_BUFFER_SIZE) for _ in range(I)]
     
     def update_v_alpha(self, network_idx, state, action):
         """Cập nhật bảng V và alpha cho cặp (state, action)"""
@@ -217,9 +226,8 @@ class QNetworkManager:
                 diff = self.q_networks[i](state_tensor) - q_avg
                 sum_squared += diff * diff
         
-        # Tính Q risk-averse với lambda_p tăng lên
-        var_term = sum_squared / (I - 1) if I > 1 else torch.zeros_like(q_random)
-        risk_term = -LAMBDA_P * torch.sqrt(var_term + 1e-6)  # Thêm epsilon nhỏ để tránh sqrt(0)
+        # Tính Q risk-averse
+        risk_term = -LAMBDA_P * sum_squared / (I - 1) if I > 1 else 0
         risk_averse_q = q_random + risk_term
         
         return risk_averse_q
@@ -227,21 +235,10 @@ class QNetworkManager:
     def choose_action(self, state, epsilon, H):
         """Chọn action theo epsilon-greedy với Q risk-averse"""
         if random.random() < epsilon:
-            # Thêm khả năng khám phá thông minh hơn: 80% ngẫu nhiên hoàn toàn, 20% chọn hành động tốt hơn
-            if random.random() < 0.8:
-                return np.random.randint(0, 3, NUM_DEVICES)
-            else:
-                # Chọn ngẫu nhiên một trong các action có Q-value cao
-                state_tensor = torch.FloatTensor(state.flatten()).unsqueeze(0)
-                with torch.no_grad():
-                    q_values = self.q_networks[H](state_tensor)[0].numpy()
-                
-                # Lấy top 5 action có Q-value cao nhất
-                top_indices = np.argsort(q_values)[-5:]
-                selected_idx = random.choice(top_indices)
-                return index_to_action(selected_idx)
+            return np.random.randint(0, 3, NUM_DEVICES)
         
         # Chọn ngẫu nhiên một Q-network
+        # random_idx = random.randint(0, I - 1)
         random_idx = H
         # Tính Q risk-averse cho tất cả action
         risk_averse_q = self.compute_risk_averse_Q(random_idx, state)
@@ -252,73 +249,67 @@ class QNetworkManager:
     
     def update_q_network(self, network_idx, state, action, reward, next_state):
         """
-        Cập nhật Q-network sử dụng Experience Replay và Target Network
+        Cập nhật Q-network theo công thức 23:
+        Q(s,a) = Q(s,a) + α(s,a) * [u(r + γ*max_a'Q(s',a') - Q(s,a)) - x_0]
         """
-        # 1. Lưu trải nghiệm vào replay buffer
-        self.replay_buffers[network_idx].push(state, action, reward, next_state)
-        
-        # 2. Cập nhật V và alpha
+        # 1. Cập nhật V và alpha
         self.update_v_alpha(network_idx, state, action)
         
-        # 3. Cập nhật mạng theo chu kỳ
-        self.t_steps += 1
-        if self.t_steps % UPDATE_EVERY != 0 or len(self.replay_buffers[network_idx]) < BATCH_SIZE:
-            return
-            
-        # 4. Lấy batch từ replay buffer
-        batch = self.replay_buffers[network_idx].sample(BATCH_SIZE)
-        states, actions, rewards, next_states = zip(*batch)
+        # 2. Thêm trải nghiệm vào buffer
+        self.replay_buffers[network_idx].add(state, action, reward, next_state)
         
-        # 5. Chuyển đổi thành numpy arrays
-        states_array = np.vstack([s.flatten() for s in states])
-        next_states_array = np.vstack([ns.flatten() for ns in next_states])
-        
-        # 6. Chuyển đổi thành tensors
-        states_tensor = torch.FloatTensor(states_array)
-        actions_tensor = torch.LongTensor([action_to_index(a) for a in actions])
-        rewards_tensor = torch.FloatTensor(rewards)
-        next_states_tensor = torch.FloatTensor(next_states_array)
-        
-        # 7. Tính current Q values
-        q_network = self.q_networks[network_idx]
-        current_q_values = q_network(states_tensor).gather(1, actions_tensor.unsqueeze(1))
-        
-        # 8. Tính next Q values sử dụng target network (Double DQN)
-        with torch.no_grad():
-            # Lấy actions với Q-values lớn nhất từ mạng chính
-            best_actions = self.q_networks[network_idx](next_states_tensor).argmax(dim=1, keepdim=True)
-            # Lấy giá trị Q cho actions đó từ target network
-            next_q_values = self.target_networks[network_idx](next_states_tensor).gather(1, best_actions)
-            target_q_values = rewards_tensor.unsqueeze(1) * REWARD_SCALING + GAMMA * next_q_values
-        
-        # 9. Tính TD errors
-        td_errors = target_q_values - current_q_values
-        
-        # 10. Tính utility từ TD errors
-        utilities = torch.tensor([[u(error.item()) - X0] for error in td_errors.squeeze(1)])
-        
-        # 11. Lấy alpha cho từng (state, action)
-        alphas = torch.ones_like(td_errors) * 0.01  # Default alpha
-        for i, (s, a) in enumerate(zip(states, actions)):
-            key = state_action_to_key(s, a)
-            if key in self.alpha[network_idx]:
-                alphas[i] = self.alpha[network_idx][key]
-        
-        # 12. Cập nhật Q-values
-        loss = F.mse_loss(current_q_values, current_q_values + alphas * utilities)
-        
-        # 13. Cập nhật mạng
+        # 3. Nếu buffer đủ lớn, tiến hành học từ mini-batch
+        if len(self.replay_buffers[network_idx]) >= MIN_REPLAY_SIZE:
+            self._learn_from_replay_buffer(network_idx)
+    
+    def _learn_from_replay_buffer(self, network_idx):
+        """Học từ replay buffer bằng cách lấy mẫu mini-batch ngẫu nhiên"""
+        # 1. Lấy mạng và optimizer tương ứng
+        network = self.q_networks[network_idx]
         optimizer = self.optimizers[network_idx]
+        
+        # 2. Lấy mẫu ngẫu nhiên từ replay buffer
+        states, actions, rewards, next_states = self.replay_buffers[network_idx].sample(BATCH_SIZE)
+        
+        # 3. Chuyển dữ liệu sang tensor
+        states_tensor = torch.FloatTensor(states.reshape(BATCH_SIZE, -1))
+        next_states_tensor = torch.FloatTensor(next_states.reshape(BATCH_SIZE, -1))
+        
+        # 4. Tính Q-values hiện tại cho trạng thái
+        q_values = network(states_tensor)
+        
+        # 5. Tính max Q-values cho trạng thái tiếp theo
+        with torch.no_grad():
+            next_q_values = network(next_states_tensor)
+            max_next_q = torch.max(next_q_values, dim=1)[0]
+        
+        # 6. Khởi tạo tensor cho target Q-values
+        target_q_values = q_values.clone().detach()
+        
+        # 7. Tính toán và cập nhật cho từng mẫu trong batch
+        for idx in range(BATCH_SIZE):
+            # Chuyển action sang index
+            action_idx = action_to_index(actions[idx])
+            
+            # Lấy alpha từ bảng
+            key = state_action_to_key(states[idx], actions[idx])
+            alpha_value = self.alpha[network_idx].get(key, 1.0)
+            
+            # Tính TD error
+            td_error = rewards[idx] + GAMMA * max_next_q[idx].item() - q_values[idx, action_idx].item()
+            
+            # Tính utility
+            utility_value = u(td_error) - X0
+            
+            # Cập nhật target Q-value
+            target_q_values[idx, action_idx] = q_values[idx, action_idx] + alpha_value * utility_value
+        
+        # 8. Tính loss và cập nhật mạng
+        loss = F.mse_loss(q_values, target_q_values)
+        
         optimizer.zero_grad()
         loss.backward()
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(q_network.parameters(), 1.0)
         optimizer.step()
-        
-        # 14. Soft update target network
-        for target_param, local_param in zip(self.target_networks[network_idx].parameters(), 
-                                          q_network.parameters()):
-            target_param.data.copy_(TAU * local_param.data + (1.0 - TAU) * target_param.data)
 
 # Các hàm khởi tạo và cập nhật state
 def initialize_state():
@@ -341,159 +332,7 @@ def initialize_action():
     action = np.random.randint(0, 3, NUM_DEVICES)
     return action
 
-# Cải tiến thuật toán phân bổ kênh
-def allocate(action, device_positions=None, h_base=None, frame=None):
-    """
-    Phân bổ kênh thông minh hơn dựa trên action và vị trí thiết bị
-    """
-    sub = [-1] * NUM_DEVICES
-    mW = [-1] * NUM_DEVICES
-    
-    # Tạo danh sách các kênh khả dụng
-    available_sub = list(range(NUM_SUBCHANNELS))
-    available_mW = list(range(NUM_BEAMS))
-    
-    # Ưu tiên các thiết bị có action=2 (cần cả 2 loại kênh)
-    device_order = []
-    for k in range(NUM_DEVICES):
-        if action[k] == 2:  # Thiết bị cần cả 2 loại kênh
-            device_order.append((k, 2))
-    
-    # Thêm các thiết bị khác vào cuối danh sách
-    for k in range(NUM_DEVICES):
-        if action[k] == 0:  # Thiết bị chỉ cần Sub-6GHz
-            device_order.append((k, 0))
-        elif action[k] == 1:  # Thiết bị chỉ cần mmWave
-            device_order.append((k, 1))
-    
-    # Phân bổ kênh theo thứ tự ưu tiên
-    for k, act_type in device_order:
-        if act_type == 0 or act_type == 2:  # Cần Sub-6GHz
-            if available_sub:
-                # Chọn kênh sub tốt nhất nếu có thông tin vị trí và h_base
-                if device_positions is not None and h_base is not None and frame is not None:
-                    best_sub = available_sub[0]
-                    max_rate = -1
-                    for s in available_sub:
-                        # Giả lập tính toán rate để chọn kênh tốt nhất
-                        rate = np.random.random()  # Thay bằng tính toán thực tế nếu có
-                        if rate > max_rate:
-                            max_rate = rate
-                            best_sub = s
-                    sub[k] = best_sub
-                    available_sub.remove(best_sub)
-                else:
-                    # Nếu không có thông tin thì chọn ngẫu nhiên
-                    rand_index = np.random.randint(len(available_sub))
-                    sub[k] = available_sub[rand_index]
-                    available_sub.pop(rand_index)
-                    
-        if act_type == 1 or act_type == 2:  # Cần mmWave
-            if available_mW:
-                # Tương tự, chọn beam mmWave tốt nhất nếu có thông tin
-                if device_positions is not None and h_base is not None and frame is not None:
-                    best_mW = available_mW[0]
-                    max_rate = -1
-                    for m in available_mW:
-                        # Giả lập tính toán rate để chọn beam tốt nhất
-                        rate = np.random.random()  # Thay bằng tính toán thực tế nếu có
-                        if rate > max_rate:
-                            max_rate = rate
-                            best_mW = m
-                    mW[k] = best_mW
-                    available_mW.remove(best_mW)
-                else:
-                    # Nếu không có thông tin thì chọn ngẫu nhiên
-                    rand_index = np.random.randint(len(available_mW))
-                    mW[k] = available_mW[rand_index]
-                    available_mW.pop(rand_index)
-    
-    return [sub, mW]
-
-# Cải tiến hàm perform_action
-def perform_action(action, l_sub_max, l_mW_max):
-    number_of_packet = np.zeros(shape=(NUM_DEVICES, 2))
-    
-    # Tối ưu hóa phân bổ gói tin dựa trên hành động và tốc độ tối đa
-    for k in range(NUM_DEVICES):
-        l_sub_max_k = l_sub_max[k]
-        l_mW_max_k = l_mW_max[k]
-        
-        if action[k] == 0:  # Chỉ dùng Sub-6GHz
-            number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS)
-            number_of_packet[k, 1] = 0
-        
-        elif action[k] == 1:  # Chỉ dùng mmWave
-            number_of_packet[k, 0] = 0
-            number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
-        
-        elif action[k] == 2:  # Dùng cả hai
-            # Nếu tổng số gói tin có thể gửi < MAX_PACKETS, gửi hết có thể
-            if l_sub_max_k + l_mW_max_k <= MAX_PACKETS:
-                number_of_packet[k, 0] = l_sub_max_k
-                number_of_packet[k, 1] = l_mW_max_k
-            else:
-                # Nếu mmWave có tốc độ tốt hơn, ưu tiên mmWave
-                if l_mW_max_k > l_sub_max_k:
-                    number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS - 1)
-                    number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS - number_of_packet[k, 1])
-                else:
-                    # Ngược lại ưu tiên Sub-6GHz
-                    number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS - 1)
-                    number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS - number_of_packet[k, 0])
-    
-    return number_of_packet
-
-def receive_feedback(packet_send, l_sub_max, l_mW_max):
-    feedback = np.zeros(shape=(NUM_DEVICES, 2))
-    for k in range(NUM_DEVICES):
-        l_sub_k = packet_send[k, 0]
-        l_mW_k = packet_send[k, 1]
-        feedback[k, 0] = min(l_sub_k, l_sub_max[k])
-        feedback[k, 1] = min(l_mW_k, l_mW_max[k])
-    return feedback
-
-def compute_packet_loss_rate(frame_num, old_packet_loss_rate, received_paket_num, sent_packet_num):
-    plr = np.zeros(shape=(NUM_DEVICES, 2))
-    for k in range(NUM_DEVICES):
-        plr[k, 0] = env.packet_loss_rate(frame_num, old_packet_loss_rate[k, 0], received_paket_num[k, 0], sent_packet_num[k, 0])
-        plr[k, 1] = env.packet_loss_rate(frame_num, old_packet_loss_rate[k, 1], received_paket_num[k, 1], sent_packet_num[k, 1])
-    return plr
-
-# Cải tiến hàm compute_reward
-def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
-    sum_reward = 0
-    
-    for k in range(NUM_DEVICES):
-        state_k = state[k]
-        # Tính thành công và thất bại
-        numerator = num_of_received_packet[k, 0] + num_of_received_packet[k, 1]  # tổng số gói tin nhận được ở UE
-        denominator = num_of_send_packet[k, 0] + num_of_send_packet[k, 1]  # tổng số gói tin gửi đi từ AP
-        
-        if denominator == 0:
-            success_rate_k = 0.0
-        else:
-            # Tăng phần thưởng khi tỉ lệ thành công cao
-            success_rate_k = (numerator / denominator) ** 1.5  # Ưu tiên hơn cho tỉ lệ thành công cao
-        
-        # Điều chỉnh hình phạt PLR
-        plr_penalty_sub = 0.8 * (1 - state_k[0]) if state_k[0] == 0 else 0  # Giảm hình phạt
-        plr_penalty_mW = 0.8 * (1 - state_k[1]) if state_k[1] == 0 else 0
-        
-        # Thêm phần thưởng cho việc gửi nhiều gói tin thành công
-        packet_bonus = 0.1 * min(1.0, numerator / MAX_PACKETS)
-        
-        # Tổng hợp phần thưởng cho thiết bị k
-        device_reward = success_rate_k + packet_bonus - plr_penalty_sub - plr_penalty_mW
-        sum_reward += device_reward
-    
-    # Áp dụng trung bình di động (exponential moving average) cho phần thưởng
-    alpha = 0.1  # Tham số cho trung bình di động
-    reward = (1 - alpha) * old_reward_value + alpha * sum_reward
-    
-    return reward
-
-# Các hàm còn lại giữ nguyên như bản gốc
+# Các hàm khác từ mã gốc giữ nguyên
 def create_h_base(num_of_frame, mean = 0, sigma = 1):
     h_base = []
     h_base_sub = env.generate_h_base(mean, sigma, num_of_frame*NUM_DEVICES*NUM_SUBCHANNELS)
@@ -534,388 +373,271 @@ def compute_r(device_positions, h_base, allocation, frame):
     r.append(r_mW)
     return r
 
-def compute_l_max(r, frame_num):
-    """Tính số gói tin tối đa có thể gửi trên mỗi kênh"""
-    l_max = []
-    l_sub_max = np.zeros(NUM_DEVICES)
-    l_mW_max = np.zeros(NUM_DEVICES)
-    r_sub = r[0]
-    r_mW = r[1]
-    
-    for k in range(NUM_DEVICES):
-        # Cải tiến công thức tính l_max với xét đến điều kiện thực tế hơn
-        # Công thức: l_max = floor(r * T / D), trong đó:
-        # - r là tốc độ dữ liệu (bit/s)
-        # - T là độ dài khung thời gian (giây)
-        # - D là kích thước gói tin (bit)
-        
-        # Thêm nhiễu ngẫu nhiên nhỏ để mô phỏng thực tế
-        noise_factor_sub = np.random.uniform(0.95, 1.05)
-        noise_factor_mW = np.random.uniform(0.92, 1.08)  # mmWave biến động nhiều hơn
-        
-        # Tính l_max với ràng buộc tối đa là MAX_PACKETS
-        l_sub_max[k] = min(MAX_PACKETS, int(np.floor(r_sub[k] * T * noise_factor_sub / D)))
-        l_mW_max[k] = min(MAX_PACKETS, int(np.floor(r_mW[k] * T * noise_factor_mW / D)))
-    
-    l_max = [l_sub_max, l_mW_max]
-    return l_max
+def l_kv_success(r):
+    l_kv_success = np.floor(np.multiply(r, T/D))
+    return l_kv_success
 
-# Cải tiến chức năng huấn luyện
-def train(num_of_frame=NUM_OF_FRAME):
-    """Huấn luyện DQN với các cải tiến trong thời gian num_of_frame"""
-    
-    # Khởi tạo vị trí thiết bị - ngẫu nhiên trong vùng bán kính 50m
-    device_positions = np.zeros((NUM_DEVICES, 2))
+def compute_average_rate(average_r, last_r, frame_num):
+    avg_r = average_r.copy()
     for k in range(NUM_DEVICES):
-        angle = np.random.uniform(0, 2 * np.pi)
-        distance = np.random.uniform(5, 50)  # Khoảng cách từ 5m đến 50m
-        device_positions[k, 0] = distance * np.cos(angle)
-        device_positions[k, 1] = distance * np.sin(angle)
+        avg_r[0][k] = (last_r[0][k] + avg_r[0][k]*(frame_num - 1))/frame_num
+        avg_r[1][k] = (last_r[1][k] + avg_r[1][k]*(frame_num - 1))/frame_num
+    return avg_r
+
+def allocate(action): #phân phối từ action đến các chính xác kênh của từng interface
+    sub =[]
+    mW = []
+    for i in range(NUM_DEVICES):
+        sub.append(-1)
+        mW.append(-1)
+
+    rand_sub = []
+    rand_mW = []
+    for i in range(NUM_SUBCHANNELS):
+        rand_sub.append(i)
+    for i in range(NUM_BEAMS):
+        rand_mW.append(i)
+        
+    for k in range(NUM_DEVICES):
+        if(action[k] == 0):
+            if len(rand_sub) > 0:
+                rand_index = np.random.randint(len(rand_sub))
+                sub[k] = rand_sub[rand_index]
+                rand_sub.pop(rand_index)
+        if(action[k] == 1):
+            if len(rand_mW) > 0:
+                rand_index = np.random.randint(len(rand_mW))
+                mW[k] = rand_mW[rand_index]
+                rand_mW.pop(rand_index)
+        if(action[k] == 2):
+            if len(rand_sub) > 0 and len(rand_mW) > 0:
+                rand_sub_index = np.random.randint(len(rand_sub))
+                rand_mW_index = np.random.randint(len(rand_mW))
+                sub[k] = rand_sub[rand_sub_index]
+                mW[k] = rand_mW[rand_mW_index]
+                rand_sub.pop(rand_sub_index)
+                rand_mW.pop(rand_mW_index)
     
-    # Khởi tạo kenh vô tuyến ngẫu nhiên cho toàn bộ quá trình huấn luyện
-    h_base = create_h_base(num_of_frame)
+    allocate = [sub, mW]
+    return allocate
+
+def perform_action(action, l_sub_max, l_mW_max):
+    number_of_packet = np.zeros(shape=(NUM_DEVICES, 2))
+    for k in range(NUM_DEVICES):
+        l_sub_max_k = l_sub_max[k]
+        l_mW_max_k = l_mW_max[k]
+        if(action[k] == 0):
+            number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS)
+            number_of_packet[k, 1] = 0
+        if(action[k] == 1):
+            number_of_packet[k, 0] = 0
+            number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
+        if(action[k] == 2):
+            if(l_mW_max_k < MAX_PACKETS):
+                number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
+                number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS - number_of_packet[k, 1])
+            else:
+                number_of_packet[k, 1] = MAX_PACKETS - 1
+                number_of_packet[k, 0] = 1
+    return number_of_packet
+
+def receive_feedback(packet_send, l_sub_max, l_mW_max):
+    feedback = np.zeros(shape=(NUM_DEVICES, 2))
+    for k in range(NUM_DEVICES):
+        l_sub_k = packet_send[k, 0]
+        l_mW_k = packet_send[k, 1]
+        feedback[k, 0] = min(l_sub_k, l_sub_max[k])
+        feedback[k, 1] = min(l_mW_k, l_mW_max[k])
+    return feedback
+
+def compute_packet_loss_rate(frame_num, old_packet_loss_rate, received_paket_num, sent_packet_num):
+    plr = np.zeros(shape=(NUM_DEVICES, 2))
+    for k in range(NUM_DEVICES):
+        plr[k, 0] = env.packet_loss_rate(frame_num, old_packet_loss_rate[k, 0], received_paket_num[k, 0], sent_packet_num[k, 0])
+        plr[k, 1] = env.packet_loss_rate(frame_num, old_packet_loss_rate[k, 1], received_paket_num[k, 1], sent_packet_num[k, 1])
+    return plr
+
+def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward_value, frame_num):
+    sum = 0
+    for k in range(NUM_DEVICES):
+        state_k = state[k]
+        numerator = num_of_received_packet[k, 0] + num_of_received_packet[k, 1] # tổng số gói tin nhận được ở UE
+        denominator = num_of_send_packet[k, 0] + num_of_send_packet[k, 1] # tổng số gói tin gửi đi từ AP
+
+        if denominator == 0:
+            success_rate_k = 0.0
+        else:
+            success_rate_k = numerator / denominator
+
+        plr_penalty_sub = (1 - state_k[0])
+        plr_penalty_mW = (1 - state_k[1])
+
+        sum = sum + success_rate_k - plr_penalty_sub - plr_penalty_mW
+    reward = ((frame_num - 1) * old_reward_value + sum) / frame_num
+    return reward
+
+# Chương trình chính
+if __name__ == "__main__":
+    # Khởi tạo manager cho các Q-Networks
+    q_manager = QNetworkManager()
     
-    # Khởi tạo các biến training
-    q_network_manager = QNetworkManager()
+    # Khởi tạo môi trường
+    device_positions = env.initialize_pos_of_devices()
     state = initialize_state()
-    epsilon = EPS_START
-    old_plr = np.zeros(shape=(NUM_DEVICES, 2))
-    old_reward_value = 0
+    action = initialize_action()
+    reward_value = 0.0
+    allocation = allocate(action)
+    packet_loss_rate = np.zeros(shape=(NUM_DEVICES, 2))
     
-    # Khởi tạo các biến theo dõi quá trình học
-    reward_history = []
-    epsilon_history = []
-    plr_history = []
-    packet_sent_history = []
-    packet_received_history = []
-    action_counts = np.zeros((NUM_DEVICES, 3))  # Đếm số lượng hành động mỗi loại cho từng thiết bị
+    # Tạo h_base cho mỗi frame
+    h_base = create_h_base(NUM_OF_FRAME + 1)
+    h_base_t = h_base[0]
+    average_r = compute_r(device_positions, h_base_t, allocation=allocate(action), frame=1)
     
-    print("Bắt đầu huấn luyện DQN với các cải tiến...")
+    # Các biến lưu kết quả
+    state_plot = []
+    action_plot = []
+    reward_plot = []
+    packet_loss_rate_plot = []
+    rate_plot = []
+    number_of_received_packet_plot = []
+    number_of_send_packet_plot = []
     
-    # Vòng lặp chính của quá trình huấn luyện
-    for frame in range(num_of_frame):
-        # Chọn Q-network ngẫu nhiên theo phân phối Poisson
+    # Vòng lặp chính
+    for frame in range(1, NUM_OF_FRAME + 1):
+        # Cập nhật epsilon
+        EPSILON = EPSILON * LAMBDA
+        
+        # Thiết lập môi trường
+        h_base_t = h_base[frame]
+        
+        # Chọn ngẫu nhiên một Q-network (tương ứng với H trong mã gốc)
         H = np.random.randint(0, I)
         
-        # Chọn action theo epsilon-greedy
-        action = q_network_manager.choose_action(state, epsilon, H)
+        # Chọn action sử dụng Q risk-averse
+        action = q_manager.choose_action(state, EPSILON, H)
+        action_plot.append(action)
+
+        allocation = allocate(action)
         
-        # Cập nhật bộ đếm hành động
-        for k in range(NUM_DEVICES):
-            action_counts[k, action[k]] += 1
+        # Thực hiện action
+        l_max_estimate = l_kv_success(average_r)
+        l_sub_max_estimate = l_max_estimate[0]
+        l_mW_max_estimate = l_max_estimate[1]
+
+        number_of_send_packet = perform_action(action, l_sub_max_estimate, l_mW_max_estimate)
+        number_of_send_packet_plot.append(number_of_send_packet)
+
+        # Nhận feedback
+        r = compute_r(device_positions, h_base_t, allocation, frame)
+        rate_plot.append(r)
         
-        # Phân bổ kênh
-        allocation = allocate(action, device_positions, h_base, frame)
-        
-        # Tính rate và l_max
-        r = compute_r(device_positions, h_base, allocation, frame)
-        l_max = compute_l_max(r, frame)
+        l_max = l_kv_success(r)
         l_sub_max = l_max[0]
         l_mW_max = l_max[1]
         
-        # Thực hiện action và nhận phản hồi
-        packet_send = perform_action(action, l_sub_max, l_mW_max)
-        feedback = receive_feedback(packet_send, l_sub_max, l_mW_max)
+        number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
+        number_of_received_packet_plot.append(number_of_received_packet)
+
+        packet_loss_rate = compute_packet_loss_rate(frame, packet_loss_rate, number_of_received_packet, number_of_send_packet)
+        packet_loss_rate_plot.append(packet_loss_rate)
         
-        # Tính PLR
-        plr = compute_packet_loss_rate(frame, old_plr, feedback, packet_send)
-        old_plr = plr
-        
-        # Cập nhật state
-        next_state = update_state(state, plr, feedback)
+        average_r = compute_average_rate(average_r, r, frame)
         
         # Tính reward
-        reward = compute_reward(next_state, packet_send, feedback, old_reward_value, frame)
-        old_reward_value = reward
+        reward_value = compute_reward(state, number_of_send_packet, number_of_received_packet, reward_value, frame)
+        reward_plot.append(reward_value)
         
-        # Cập nhật Q-network
-        q_network_manager.update_q_network(H, state, action, reward, next_state)
+        next_state = update_state(state, packet_loss_rate, number_of_received_packet)
         
-        # Cập nhật state
+        # Tạo mask J (Poisson)
+        J = np.random.poisson(1, I)
+        
+        # Cập nhật các Q-networks
+        for i in range(I):
+            if J[i] == 1:
+                q_manager.update_q_network(i, state, action, reward_value, next_state)
+        
+        # Chuyển sang trạng thái mới
         state = next_state
         
-        # Giảm epsilon theo công thức mới
-        epsilon = max(EPS_END, epsilon * LAMBDA)
-        
-        # Lưu trữ dữ liệu cho phân tích
-        reward_history.append(reward)
-        epsilon_history.append(epsilon)
-        
-        # Tính PLR trung bình
-        avg_plr = np.mean(plr)
-        plr_history.append(avg_plr)
-        
-        # Thống kê gói tin gửi/nhận
-        total_sent = np.sum(packet_send)
-        total_received = np.sum(feedback)
-        packet_sent_history.append(total_sent)
-        packet_received_history.append(total_received)
-        
-        # In thông tin huấn luyện sau mỗi 100 frame
-        if (frame + 1) % 100 == 0:
-            print(f"Frame: {frame+1}/{num_of_frame}, "
-                  f"Reward: {reward:.4f}, "
-                  f"Epsilon: {epsilon:.4f}, "
-                  f"PLR trung bình: {avg_plr:.4f}, "
-                  f"Gói tin gửi/nhận: {total_sent}/{total_received}")
+        # In thông tin
+        if frame % 100 == 0:
+            print(f"Frame {frame}: Reward = {reward_value}")
+            print(f"PLR = {packet_loss_rate}")
+            print(f"Replay buffer size: {[len(buf) for buf in q_manager.replay_buffers]}")
     
-    # Trả về kết quả huấn luyện
-    training_result = {
-        'reward_history': reward_history,
-        'epsilon_history': epsilon_history,
-        'plr_history': plr_history,
-        'packet_sent_history': packet_sent_history,
-        'packet_received_history': packet_received_history,
-        'action_counts': action_counts,
-        'q_network_manager': q_network_manager
-    }
-    
-    return training_result
 
-# Vẽ đồ thị kết quả huấn luyện
-def plot_training_results(training_result):
-    """Vẽ biểu đồ kết quả huấn luyện"""
-    reward_history = training_result['reward_history']
-    epsilon_history = training_result['epsilon_history']
-    plr_history = training_result['plr_history']
-    packet_sent_history = training_result['packet_sent_history']
-    packet_received_history = training_result['packet_received_history']
-    action_counts = training_result['action_counts']
+
+    total_reward = np.sum(reward_plot)
+    print("Avg reward:", total_reward/10000)
+    total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
+    total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
+    print("Avg success:", total_received/total_send)
     
-    # Tạo cửa sổ biểu đồ
-    plt.figure(figsize=(20, 12))
-    
-    # Biểu đồ phần thưởng
-    plt.subplot(2, 3, 1)
-    plt.plot(reward_history)
-    plt.title('Phần thưởng theo thời gian')
+
+    # Vẽ đồ thị reward
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
     plt.xlabel('Frame')
-    plt.ylabel('Phần thưởng')
+    plt.ylabel('Reward')
     plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
     
-    # Biểu đồ epsilon
-    plt.subplot(2, 3, 2)
-    plt.plot(epsilon_history)
-    plt.title('Epsilon theo thời gian')
-    plt.xlabel('Frame')
-    plt.ylabel('Epsilon')
-    plt.grid(True)
+    # Vẽ đồ thị PLR
+    packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+
     
-    # Biểu đồ PLR
-    plt.subplot(2, 3, 3)
-    plt.plot(plr_history)
-    plt.axhline(y=PLR_MAX, color='red', linestyle='--', label=f'Ngưỡng PLR ({PLR_MAX})')
-    plt.title('PLR trung bình theo thời gian')
+    plt.figure(figsize=(12, 6))
+    for device_idx in range(NUM_DEVICES):
+        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    
+    # Thêm đường chuẩn y = 0.1
+    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+
+    plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
     plt.xlabel('Frame')
     plt.ylabel('PLR')
+    plt.grid(True)
     plt.legend()
-    plt.grid(True)
-    
-    # Biểu đồ gói tin
-    plt.subplot(2, 3, 4)
-    plt.plot(packet_sent_history, label='Gửi')
-    plt.plot(packet_received_history, label='Nhận')
-    plt.title('Số gói tin gửi/nhận theo thời gian')
-    plt.xlabel('Frame')
-    plt.ylabel('Số gói tin')
-    plt.legend()
-    plt.grid(True)
-    
-    # Biểu đồ hiệu suất
-    plt.subplot(2, 3, 5)
-    efficiency = np.array(packet_received_history) / np.array(packet_sent_history)
-    plt.plot(efficiency)
-    plt.title('Hiệu suất gửi/nhận theo thời gian')
-    plt.xlabel('Frame')
-    plt.ylabel('Hiệu suất')
-    plt.grid(True)
-    
-    # Biểu đồ phân phối hành động
-    plt.subplot(2, 3, 6)
-    bar_width = 0.25
-    x = np.arange(NUM_DEVICES)
-    plt.bar(x - bar_width, action_counts[:, 0] / NUM_OF_FRAME, bar_width, label='Sub-6GHz')
-    plt.bar(x, action_counts[:, 1] / NUM_OF_FRAME, bar_width, label='mmWave')
-    plt.bar(x + bar_width, action_counts[:, 2] / NUM_OF_FRAME, bar_width, label='Cả hai')
-    plt.title('Phân phối hành động theo thiết bị')
-    plt.xlabel('Thiết bị')
-    plt.ylabel('Tỷ lệ lựa chọn')
-    plt.xticks(x, [f'UE{i+1}' for i in range(NUM_DEVICES)])
-    plt.legend()
-    plt.grid(True)
-    
     plt.tight_layout()
-    plt.savefig('training_results.png')
     plt.show()
 
-# Hàm đánh giá (evaluate) mô hình sau khi huấn luyện
-def evaluate(q_network_manager, num_episodes=100):
-    """Đánh giá hiệu suất của mô hình đã huấn luyện"""
-    print("Bắt đầu đánh giá mô hình...")
-    
-    # Khởi tạo vị trí thiết bị mới cho đánh giá
-    device_positions = np.zeros((NUM_DEVICES, 2))
-    for k in range(NUM_DEVICES):
-        angle = np.random.uniform(0, 2 * np.pi)
-        distance = np.random.uniform(5, 50)
-        device_positions[k, 0] = distance * np.cos(angle)
-        device_positions[k, 1] = distance * np.sin(angle)
-    
-    # Khởi tạo kenh vô tuyến ngẫu nhiên cho đánh giá
-    h_base = create_h_base(num_episodes)
-    
-    # Khởi tạo các biến đánh giá
-    state = initialize_state()
-    old_plr = np.zeros(shape=(NUM_DEVICES, 2))
-    total_reward = 0
-    
-    # Thống kê đánh giá
-    reward_history = []
-    plr_history = []
-    packet_sent_total = 0
-    packet_received_total = 0
-    action_counts = np.zeros((NUM_DEVICES, 3))
-    
-    # Vòng lặp đánh giá
-    for episode in range(num_episodes):
-        # Chọn Q-network tốt nhất (ở đây ta chọn Q-network đầu tiên)
-        H = 0
-        
-        # Chọn action tốt nhất (không sử dụng epsilon-greedy)
-        action = q_network_manager.choose_action(state, 0.0, H)
-        
-        # Cập nhật bộ đếm hành động
-        for k in range(NUM_DEVICES):
-            action_counts[k, action[k]] += 1
-        
-        # Phân bổ kênh
-        allocation = allocate(action, device_positions, h_base, episode)
-        
-        # Tính rate và l_max
-        r = compute_r(device_positions, h_base, allocation, episode)
-        l_max = compute_l_max(r, episode)
-        l_sub_max = l_max[0]
-        l_mW_max = l_max[1]
-        
-        # Thực hiện action và nhận phản hồi
-        packet_send = perform_action(action, l_sub_max, l_mW_max)
-        feedback = receive_feedback(packet_send, l_sub_max, l_mW_max)
-        
-        # Tính PLR
-        plr = compute_packet_loss_rate(episode, old_plr, feedback, packet_send)
-        old_plr = plr
-        
-        # Cập nhật state
-        next_state = update_state(state, plr, feedback)
-        
-        # Tính reward
-        reward = compute_reward(next_state, packet_send, feedback, 0, episode)
-        total_reward += reward
-        
-        # Cập nhật state
-        state = next_state
-        
-        # Lưu trữ dữ liệu cho phân tích
-        reward_history.append(reward)
-        
-        # Tính PLR trung bình
-        avg_plr = np.mean(plr)
-        plr_history.append(avg_plr)
-        
-        # Thống kê gói tin gửi/nhận
-        episode_sent = np.sum(packet_send)
-        episode_received = np.sum(feedback)
-        packet_sent_total += episode_sent
-        packet_received_total += episode_received
-    
-    # Tính các chỉ số đánh giá
-    avg_reward = total_reward / num_episodes
-    avg_plr = np.mean(plr_history)
-    transmission_efficiency = packet_received_total / packet_sent_total if packet_sent_total > 0 else 0
-    
-    # Phân phối hành động
-    action_distribution = action_counts / num_episodes
-    
-    # In kết quả đánh giá
-    print(f"\nKết quả đánh giá sau {num_episodes} episodes:")
-    print(f"Phần thưởng trung bình: {avg_reward:.4f}")
-    print(f"PLR trung bình: {avg_plr:.4f}")
-    print(f"Hiệu suất truyền: {transmission_efficiency:.4f}")
-    print(f"Tổng số gói tin gửi: {packet_sent_total}")
-    print(f"Tổng số gói tin nhận: {packet_received_total}")
-    print("\nPhân phối hành động theo thiết bị:")
-    for k in range(NUM_DEVICES):
-        print(f"UE{k+1}: Sub-6GHz={action_distribution[k,0]:.2f}, "
-              f"mmWave={action_distribution[k,1]:.2f}, "
-              f"Cả hai={action_distribution[k,2]:.2f}")
-    
-    # Trả về kết quả đánh giá
-    evaluation_result = {
-        'avg_reward': avg_reward,
-        'avg_plr': avg_plr,
-        'transmission_efficiency': transmission_efficiency,
-        'packet_sent_total': packet_sent_total,
-        'packet_received_total': packet_received_total,
-        'action_distribution': action_distribution,
-        'reward_history': reward_history,
-        'plr_history': plr_history
-    }
-    
-    return evaluation_result
+    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+    action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+    num_frames, num_devices = action_array.shape
+    # Chuẩn bị mảng lưu phần trăm
+    # shape: (3 hành động, num_devices)
+    percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
 
-# Hàm lưu và tải mô hình
-def save_model(q_network_manager, filename='dqn_model.pth'):
-    """Lưu mô hình DQN đã huấn luyện"""
-    model_state = {
-        'q_networks': [net.state_dict() for net in q_network_manager.q_networks],
-        'target_networks': [net.state_dict() for net in q_network_manager.target_networks],
-        'V': q_network_manager.V,
-        'alpha': q_network_manager.alpha
-    }
-    torch.save(model_state, filename)
-    print(f"Mô hình đã được lưu vào {filename}")
+    # Tính phần trăm cho từng hành động theo từng thiết bị
+    for action in [0, 1, 2]:
+        # Đếm số lần action xuất hiện ở từng cột (thiết bị)
+        counts = np.sum(action_array == action, axis=0)
+        percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
 
-def load_model(filename='dqn_model.pth'):
-    """Tải mô hình DQN đã lưu"""
-    if not os.path.exists(filename):
-        print(f"Không tìm thấy file {filename}")
-        return None
-    
-    model_state = torch.load(filename)
-    q_network_manager = QNetworkManager()
-    
-    # Nạp trọng số vào các mạng
-    for i in range(I):
-        q_network_manager.q_networks[i].load_state_dict(model_state['q_networks'][i])
-        q_network_manager.target_networks[i].load_state_dict(model_state['target_networks'][i])
-    
-    # Nạp các bảng V và alpha
-    q_network_manager.V = model_state['V']
-    q_network_manager.alpha = model_state['alpha']
-    
-    print(f"Đã tải mô hình từ {filename}")
-    return q_network_manager
+    labels = [f'Device {i+1}' for i in range(num_devices)]
+    x = np.arange(num_devices)  # Vị trí cột
+    width = 0.25  # Độ rộng của mỗi nhóm cột
 
-# Hàm main
-def main():
-    """Hàm chính thực thi quá trình huấn luyện và đánh giá"""
-    print("Bắt đầu chương trình...")
-    
-    # Huấn luyện mô hình
-    training_result = train(NUM_OF_FRAME)
-    
-    # Vẽ biểu đồ kết quả huấn luyện
-    plot_training_results(training_result)
-    
-    # Lưu mô hình
-    save_model(training_result['q_network_manager'])
-    
-    # Đánh giá mô hình
-    evaluation_result = evaluate(training_result['q_network_manager'])
-    
-    # So sánh với thuật toán cơ bản (nếu cần)
-    print("\nChương trình kết thúc.")
+    plt.figure(figsize=(10, 6))
+    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
 
-# Khởi chạy chương trình khi thực thi trực tiếp
-if __name__ == "__main__":
-    main()
+    plt.ylabel('Ratio (%)')
+    plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
+    plt.xticks(x, labels)
+    plt.ylim(0, 100)
+    plt.legend()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.show()
