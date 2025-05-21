@@ -17,7 +17,7 @@ EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 4
+I = 2
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -474,10 +474,10 @@ h_base_t = h_base[0] #khởi tạo tại frame thứ 0
 average_r = compute_r(device_positions, h_base_t, allocation=allocate(action),frame=1)
 
 # state_plot=[]
-# action_plot=[]
+action_plot=[]
 reward_plot=[]
-# number_of_sent_packet_plot=[]
-# number_of_received_packet_plot=[]
+number_of_send_packet_plot=[]
+number_of_received_packet_plot=[]
 packet_loss_rate_plot=[]
 rate_plot=[] #giá trị vận tốc
 
@@ -498,6 +498,8 @@ for frame in range(1, NUM_OF_FRAME + 1):
 
     # Select action
     action = choose_action(state, risk_adverse_Q)
+    action_plot.append(action)
+
     allocation = allocate(action)
     # action_plot.append(action)
 
@@ -506,6 +508,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
     l_sub_max_estimate = l_max_estimate[0]
     l_mW_max_estimate = l_max_estimate[1]
     number_of_send_packet = perform_action(action, l_sub_max_estimate, l_mW_max_estimate)
+    number_of_send_packet_plot.append(number_of_send_packet)
     # number_of_sent_packet_plot.append(number_of_send_packet)
 
     # Get feedback
@@ -522,8 +525,9 @@ for frame in range(1, NUM_OF_FRAME + 1):
     # rate_plot.append(r)
 
     number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
+    number_of_received_packet_plot.append(number_of_received_packet)
     # number_of_received_packet = receive_feedback(number_of_send_packet, l_sub_max, l_mW_max)
-    print(f"number_of_received_packet {number_of_received_packet} tai frame {frame}")
+    # print(f"number_of_received_packet {number_of_received_packet} tai frame {frame}")
 
     packet_loss_rate = compute_packet_loss_rate(frame, packet_loss_rate, number_of_received_packet, number_of_send_packet)
     print(f"packet_loss_rate {packet_loss_rate} tai frame {frame}")
@@ -556,6 +560,12 @@ for frame in range(1, NUM_OF_FRAME + 1):
     state = next_state
 
     print('frame: ',frame)
+
+total_reward = np.sum(reward_plot)
+print("Avg reward:", total_reward/10000)
+total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
+total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
+print("Avg success:", total_received/total_send)
 
 # print("COUNT: {COUNT}")
 # Vẽ đồ thị
@@ -591,6 +601,38 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
+
+#===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+# Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+num_frames, num_devices = action_array.shape
+# Chuẩn bị mảng lưu phần trăm
+# shape: (3 hành động, num_devices)
+percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
+
+# Tính phần trăm cho từng hành động theo từng thiết bị
+for action in [0, 1, 2]:
+    # Đếm số lần action xuất hiện ở từng cột (thiết bị)
+    counts = np.sum(action_array == action, axis=0)
+    percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
+
+labels = [f'Device {i+1}' for i in range(num_devices)]
+x = np.arange(num_devices)  # Vị trí cột
+width = 0.25  # Độ rộng của mỗi nhóm cột
+
+plt.figure(figsize=(10, 6))
+plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+
+plt.ylabel('Ratio (%)')
+plt.title('Interface usage distribution per device, scenario 1')
+plt.xticks(x, labels)
+plt.ylim(0, 100)
+plt.legend()
+plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
 
 # import numpy as np
 # import os

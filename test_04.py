@@ -9,9 +9,9 @@ import random
 from collections import defaultdict, deque
 
 # Hyperparameters
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -179,7 +179,7 @@ class QNetworkManager:
         
         for _ in range(I):
             network = QNetwork()
-            optimizer = optim.Adam(network.parameters(), lr=0.005) #tạo bộ tối ưu hoá cho mạng
+            optimizer = optim.Adam(network.parameters(), lr=0.01) #tạo bộ tối ưu hoá cho mạng
             self.q_networks.append(network)
             self.optimizers.append(optimizer)
         
@@ -260,9 +260,9 @@ class QNetworkManager:
         
         # 3. Nếu buffer đủ lớn, tiến hành học từ mini-batch
         if len(self.replay_buffers[network_idx]) >= MIN_REPLAY_SIZE:
-            self._learn_from_replay_buffer(network_idx)
+            self.learn_from_replay_buffer(network_idx)
     
-    def _learn_from_replay_buffer(self, network_idx):
+    def learn_from_replay_buffer(self, network_idx):
         """Học từ replay buffer bằng cách lấy mẫu mini-batch ngẫu nhiên"""
         # 1. Lấy mạng và optimizer tương ứng
         network = self.q_networks[network_idx]

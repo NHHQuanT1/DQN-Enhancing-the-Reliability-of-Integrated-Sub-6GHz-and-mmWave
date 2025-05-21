@@ -1,4 +1,5 @@
 import environment as env
+import save_result as save 
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -9,9 +10,9 @@ import random
 from collections import defaultdict
 
 # Hyperparameters
-NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 16  # Số beam mmWave (M)
+NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -23,7 +24,7 @@ EPSILON = 0.5
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 4  # Số lượng Q-network
+I = 2  # Số lượng Q-network
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -121,7 +122,7 @@ class QNetworkManager:
         
         for _ in range(I):
             network = QNetwork()
-            optimizer = optim.Adam(network.parameters(), lr=0.001) #tạo bộ tối ưu hoá cho mạng
+            optimizer = optim.Adam(network.parameters(), lr=0.01) #tạo bộ tối ưu hoá cho mạng
             self.q_networks.append(network)
             self.optimizers.append(optimizer)
         
@@ -224,7 +225,7 @@ class QNetworkManager:
         
         # 9. Tạo target Q-values (chỉ cập nhật cho action đã chọn)
         target_q_values = q_values.clone().detach() #sao chép và tắt kết nối gradient
-        target_q_values[0, action_idx] = current_q + alpha_value * utility_value
+        target_q_values[0, action_idx] = current_q + alpha_value * utility_value #update giá trị Q
         
         # 10. Tính loss và cập nhật network
         # Chỉ tính loss cho action được chọn
@@ -414,7 +415,7 @@ if __name__ == "__main__":
     
     # Tạo h_base cho mỗi frame
     h_base = create_h_base(NUM_OF_FRAME + 1)
-    h_base_t = h_base[0]
+    h_base_t = h_base[0] #hệ số phai mờ kênh cho sub-6GHz
     average_r = compute_r(device_positions, h_base_t, allocation=allocate(action), frame=1)
     
     # Các biến lưu kết quả
@@ -496,6 +497,20 @@ if __name__ == "__main__":
     total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
     print("Avg success:", total_received/total_send)
     
+    tunable_parameters = {
+    'h_base_sub6': h_base_t,
+    'state': state_plot,
+    'action': action_plot,
+    'reward': reward_plot,
+    'packet_loss_rate': packet_loss_rate_plot,
+    'rate_plot': rate_plot,
+    'number_of_received_packet': number_of_received_packet_plot,
+    'number_of_send_packet': number_of_send_packet_plot,
+    'Avg reward': total_reward/10000,
+    'Avg success': total_received/total_send,
+    }
+
+    save.save_tunable_parameters_txt(tunable_parameters, save_dir='tunable_para_test_03')
 
     # Vẽ đồ thị reward
     plt.figure(figsize=(12, 6))

@@ -26,3 +26,23 @@ with open(save_path, 'rb') as f:
     saved_data = pickle.load(f)
 
 print("Dữ liệu được lưu vào:", saved_data['timestamp'])
+
+
+
+def save_tunable_parameters_txt(tunable_parameters, save_dir='tunable_para_test_03'):
+    # Tạo tên file dựa trên thời gian hiện tại
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"tunable_parameters_{current_time}.txt"
+
+    # Đường dẫn đầy đủ
+    full_path = os.path.join(save_dir, filename)
+
+    # Tạo thư mục nếu chưa tồn tại
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Ghi vào file
+    with open(full_path, 'w') as f:
+        for key, value in tunable_parameters.items():
+            f.write(f'{key}: {value}\n')
+
+    print(f"[INFO] Hyperparameters saved to {full_path}")
