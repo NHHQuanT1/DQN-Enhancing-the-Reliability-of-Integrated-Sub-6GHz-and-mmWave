@@ -574,10 +574,14 @@ plt.show()
 packet_loss_rate_plot = np.array(packet_loss_rate_plot)
 frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
 
+# Tổng PLR của mỗi thiết bị theo thời gian (tức là: cộng sub-6GHz + mmWave)
+plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+
 plt.figure(figsize=(12, 6))
 for device_idx in range(NUM_DEVICES):
-    plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
-    plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+    # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+    # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+    plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
 
 plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame')
 plt.xlabel('Frame')
