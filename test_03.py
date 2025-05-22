@@ -490,90 +490,104 @@ if __name__ == "__main__":
             print(f"PLR = {packet_loss_rate}")
     
 
-    
+    #===Avg reward ====
     total_reward = np.sum(reward_plot)
     print("Avg reward:", total_reward/10000)
+    # ==== Avg success =====
     total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
     total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
     print("Avg success:", total_received/total_send)
-    
-    tunable_parameters = {
-    'h_base_sub6': h_base_t,
-    'state': state_plot,
-    'action': action_plot,
-    'reward': reward_plot,
-    'packet_loss_rate': packet_loss_rate_plot,
-    'rate_plot': rate_plot,
-    'number_of_received_packet': number_of_received_packet_plot,
-    'number_of_send_packet': number_of_send_packet_plot,
-    'Avg reward': total_reward/10000,
-    'Avg success': total_received/total_send,
-    }
-
-    save.save_tunable_parameters_txt(tunable_parameters, save_dir='tunable_para_test_03')
-
-    # Vẽ đồ thị reward
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-    plt.title('Biểu đồ Reward theo từng Frame')
-    plt.xlabel('Frame')
-    plt.ylabel('Reward')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    
-    # Vẽ đồ thị PLR
+    # ==== PLR per device =====
     packet_loss_rate_plot = np.array(packet_loss_rate_plot)
-    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
-    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2) #plr của từng thiết bị qua từng frame 
+    total_plr_per_device = np.sum(plr_sum_per_device, axis=0) #tổng của plr của tất cả frames cho từng thiết bị (10000 frames)
+
+    #tính trung bình plr của từng thiết bị qua tất cả frames
+    for i, total in enumerate(total_plr_per_device):
+        avg_plr_of_devices = 0.0
+        print(f"Thiết bị {i}: Avg packet loss rate = {total/NUM_OF_FRAME}")
+        avg_plr_of_devices += PLR_MAX*NUM_OF_FRAME - total
+    avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
+
+    print("Avg plr_total_of_device:", avg_plr_total_of_device)
+
+    # tunable_parameters = {
+    # 'h_base_sub6': h_base_t,
+    # 'state': state_plot,
+    # 'action': action_plot,
+    # 'reward': reward_plot,
+    # 'packet_loss_rate': packet_loss_rate_plot,
+    # 'rate_plot': rate_plot,
+    # 'number_of_received_packet': number_of_received_packet_plot,
+    # 'number_of_send_packet': number_of_send_packet_plot,
+    # 'Avg reward': total_reward/10000,
+    # 'Avg success': total_received/total_send,
+    # }
+
+    # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_03')
+
+    # # Vẽ đồ thị reward
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    # plt.title('Biểu đồ Reward theo từng Frame')
+    # plt.xlabel('Frame')
+    # plt.ylabel('Reward')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
+    
+    # # Vẽ đồ thị PLR
+    # packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+    # frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+    # plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
 
     
-    plt.figure(figsize=(12, 6))
-    for device_idx in range(NUM_DEVICES):
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
-        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    # plt.figure(figsize=(12, 6))
+    # for device_idx in range(NUM_DEVICES):
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+    #     plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
     
-    # 👉 Thêm đường chuẩn y = 0.1
-    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+    # # 👉 Thêm đường chuẩn y = 0.1
+    # plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
 
-    plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame')
-    plt.xlabel('Frame')
-    plt.ylabel('PLR')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame')
+    # plt.xlabel('Frame')
+    # plt.ylabel('PLR')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
 
-    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
-    # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
-    action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
-    num_frames, num_devices = action_array.shape
-    # Chuẩn bị mảng lưu phần trăm
-    # shape: (3 hành động, num_devices)
-    percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
+    # # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+    # action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+    # num_frames, num_devices = action_array.shape
+    # # Chuẩn bị mảng lưu phần trăm
+    # # shape: (3 hành động, num_devices)
+    # percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
 
-    # Tính phần trăm cho từng hành động theo từng thiết bị
-    for action in [0, 1, 2]:
-        # Đếm số lần action xuất hiện ở từng cột (thiết bị)
-        counts = np.sum(action_array == action, axis=0)
-        percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
+    # # Tính phần trăm cho từng hành động theo từng thiết bị
+    # for action in [0, 1, 2]:
+    #     # Đếm số lần action xuất hiện ở từng cột (thiết bị)
+    #     counts = np.sum(action_array == action, axis=0)
+    #     percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
 
-    labels = [f'Device {i+1}' for i in range(num_devices)]
-    x = np.arange(num_devices)  # Vị trí cột
-    width = 0.25  # Độ rộng của mỗi nhóm cột
+    # labels = [f'Device {i+1}' for i in range(num_devices)]
+    # x = np.arange(num_devices)  # Vị trí cột
+    # width = 0.25  # Độ rộng của mỗi nhóm cột
 
-    plt.figure(figsize=(10, 6))
-    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
-    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
-    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+    # plt.figure(figsize=(10, 6))
+    # plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+    # plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+    # plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
 
-    plt.ylabel('Ratio (%)')
-    plt.title('Interface usage distribution per device, scenario 1')
-    plt.xticks(x, labels)
-    plt.ylim(0, 100)
-    plt.legend()
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.show()
+    # plt.ylabel('Ratio (%)')
+    # plt.title('Interface usage distribution per device, scenario 1')
+    # plt.xticks(x, labels)
+    # plt.ylim(0, 100)
+    # plt.legend()
+    # plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    # plt.tight_layout()
+    # plt.show()
