@@ -1,4 +1,5 @@
 import environment as env
+import save_result as save
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -575,6 +576,20 @@ if __name__ == "__main__":
     total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
     print("Avg success:", total_received/total_send)
     
+    # tunable_parameters = {
+    # 'h_base_sub6': h_base_t,
+    # 'state': state_plot,
+    # 'action': action_plot,
+    # 'reward': reward_plot,
+    # 'packet_loss_rate': packet_loss_rate_plot,
+    # 'rate_plot': rate_plot,
+    # 'number_of_received_packet': number_of_received_packet_plot,
+    # 'number_of_send_packet': number_of_send_packet_plot,
+    # 'Avg reward': total_reward/10000,
+    # 'Avg success': total_received/total_send,
+    # }
+
+    # save.save_tunable_parameters_txt(tunable_parameters, save_dir='tunable_para_test_04')
 
     # Vẽ đồ thị reward
     plt.figure(figsize=(12, 6))

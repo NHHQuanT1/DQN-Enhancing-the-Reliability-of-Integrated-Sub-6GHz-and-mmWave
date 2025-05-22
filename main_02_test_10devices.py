@@ -559,7 +559,7 @@ for frame in range(1, NUM_OF_FRAME + 1):
             add_new_state_to_table(Q_tables[i], next_state_tuple)
     state = next_state
 
-    print('frame: ',frame)
+    # print('frame: ',frame)
 
 total_reward = np.sum(reward_plot)
 print("Avg reward:", total_reward/10000)

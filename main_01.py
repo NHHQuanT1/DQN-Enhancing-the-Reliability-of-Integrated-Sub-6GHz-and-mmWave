@@ -547,24 +547,24 @@ plt.tight_layout()
 plt.show()
 
 
-import numpy as np
-import os
-from datetime import datetime
+# import numpy as np
+# import os
+# from datetime import datetime
 
-# Thư mục lưu file
-save_dir = "results"
-os.makedirs(save_dir, exist_ok=True)
+# # Thư mục lưu file
+# save_dir = "results"
+# os.makedirs(save_dir, exist_ok=True)
 
-# Tên file kèm ngày giờ
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-file_path = os.path.join(save_dir, f"Training_results_{timestamp}.npz")
+# # Tên file kèm ngày giờ
+# timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+# file_path = os.path.join(save_dir, f"Training_results_{timestamp}.npz")
 
-# Lưu nhiều mảng với định dạng gốc (giữ nguyên shape)
-np.savez(file_path,
-         reward_plot=reward_plot,
-         packet_loss_rate_plot=packet_loss_rate_plot,
-         rate_plot=rate_plot)
+# # Lưu nhiều mảng với định dạng gốc (giữ nguyên shape)
+# np.savez(file_path,
+#          reward_plot=reward_plot,
+#          packet_loss_rate_plot=packet_loss_rate_plot,
+#          rate_plot=rate_plot)
 
-print(f"✅ Đã lưu kết quả vào file: {file_path}")
+# print(f"✅ Đã lưu kết quả vào file: {file_path}")
 
 

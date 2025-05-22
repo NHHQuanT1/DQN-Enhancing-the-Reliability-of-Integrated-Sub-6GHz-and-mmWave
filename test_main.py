@@ -1,8 +1,6 @@
 import test_env as env
-import IO
 import numpy as np
 import matplotlib.pyplot as plt
-import Plot
 
 # Number of APs
 NUM_OF_AP = 1

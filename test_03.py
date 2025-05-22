@@ -490,7 +490,7 @@ if __name__ == "__main__":
             print(f"PLR = {packet_loss_rate}")
     
 
-
+    
     total_reward = np.sum(reward_plot)
     print("Avg reward:", total_reward/10000)
     total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
