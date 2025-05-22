@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 
 
 # Thiết lập tham số
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 NUM_ACTIONS = 3  # 3 hành động: 0 (Sub-6GHz), 1 (mmWave), 2 (cả hai)
@@ -47,10 +47,38 @@ def initialize_pos_of_devices():
         elif(i == 2):
             x = -60
             y = -60
-        #position other devices
-        else: 
-            x = random.uniform(-80, 80)   
-            y = random.uniform(-80, 80)   
+        #position other devices (from device_4 to device_10)
+        elif(i == 3):
+            x = -40
+            y = -40
+
+        elif(i == 4):
+            x = 15
+            y = -75
+
+        elif(i == 5):
+            x = -25
+            y = -20
+
+        elif(i == 6):
+            x = -40
+            y = 15
+
+        elif(i == 7):
+            x = 60
+            y = 55
+
+        elif(i == 8):
+            x = 50
+            y = 0
+
+        elif(i == 9):
+            x = 50
+            y = -40
+
+        # else: 
+        #     x = random.uniform(-80, 80)   
+        #     y = random.uniform(-80, 80)   
         list_of_devices.append((x,y))        
     return list_of_devices
 

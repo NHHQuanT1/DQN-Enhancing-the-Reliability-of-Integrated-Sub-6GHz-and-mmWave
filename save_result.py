@@ -28,10 +28,10 @@ import os
 
 
 
-def save_tunable_parameters_txt(tunable_parameters, save_dir='tunable_para_test_03'):
+def save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_03'):
     # Tạo tên file dựa trên thời gian hiện tại
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"tunable_parameters_{current_time}.txt"
+    filename = f"{I}Q_{NUM_DEVICES}D_tunable_parameters_{current_time}.txt"
 
     # Đường dẫn đầy đủ
     full_path = os.path.join(save_dir, filename)
@@ -44,4 +44,4 @@ def save_tunable_parameters_txt(tunable_parameters, save_dir='tunable_para_test_
         for key, value in tunable_parameters.items():
             f.write(f'{key}: {value}\n')
 
-    print(f"[INFO] Hyperparameters saved to {full_path}")
+    print(f"[INFO] Tunable parameters saved to {full_path}")

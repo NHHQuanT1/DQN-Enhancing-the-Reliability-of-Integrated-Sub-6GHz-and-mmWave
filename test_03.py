@@ -10,9 +10,9 @@ import random
 from collections import defaultdict
 
 # Hyperparameters
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -20,7 +20,7 @@ EPS_START = 0.5  # Khởi đầu epsilon
 EPS_END = 0.05  # Kết thúc epsilon
 EPS_DECAY = 0.995  # Decay factor
 BETA = -0.5
-EPSILON = 0.5
+EPSILON = 1
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
@@ -505,7 +505,7 @@ if __name__ == "__main__":
     #tính trung bình plr của từng thiết bị qua tất cả frames
     for i, total in enumerate(total_plr_per_device):
         avg_plr_of_devices = 0.0
-        print(f"Thiết bị {i}: Avg packet loss rate = {total/NUM_OF_FRAME}")
+        print(f"Thiết bị {i + 1}: Avg packet loss rate = {total/NUM_OF_FRAME}")
         avg_plr_of_devices += PLR_MAX*NUM_OF_FRAME - total
     avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
 
