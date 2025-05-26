@@ -1,5 +1,5 @@
 import environment as env
-import save_result as save 
+import save_result as save
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -7,17 +7,17 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import random
-from collections import defaultdict
+from collections import defaultdict, deque
 
 # Hyperparameters
-NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 16  # Số beam mmWave (M)
+NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
 EPS_START = 0.5  # Khởi đầu epsilon
-EPS_END = 0.05  # Kết thúc epsilon
+EPS_END = 0.05 # Kết thúc epsilon
 EPS_DECAY = 0.995  # Decay factor
 BETA = -0.5
 EPSILON = 1
@@ -28,6 +28,64 @@ I = 2  # Số lượng Q-network
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
+
+# Tham số mới cho Replay Buffer
+REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
+BATCH_SIZE = 16               # Kích thước batch để học
+MIN_REPLAY_SIZE = 500        # Kích thước tối thiểu để bắt đầu học
+
+# ===== Định nghĩa lớp ReplayBuffer =====
+class ReplayBuffer:
+    def __init__(self, buffer_size):
+        """Khởi tạo buffer với kích thước cho trước"""
+        self.buffer = deque(maxlen=buffer_size)
+    
+    def add(self, state, action, reward, next_state):
+        """
+        Thêm một mẫu trải nghiệm vào buffer
+        state: trạng thái hiện tại
+        action: hành động được thực hiện
+        reward: phần thưởng nhận được
+        next_state: trạng thái tiếp theo
+        """
+        experience = (state, action, reward, next_state)
+        self.buffer.append(experience)
+    
+    def sample(self, batch_size):
+        """
+        Lấy mẫu ngẫu nhiên một batch từ buffer
+        Trả về tuple (states, actions, rewards, next_states)
+        """
+        # Đảm bảo batch_size không lớn hơn kích thước hiện tại của buffer
+        batch_size = min(batch_size, len(self.buffer))
+        
+        # Lấy mẫu ngẫu nhiên các chỉ số
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
+        
+        # Lấy dữ liệu từ các chỉ số đã chọn
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        
+        for idx in indices:
+            state, action, reward, next_state = self.buffer[idx]
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+        
+        # Chuyển sang numpy array để dễ xử lý
+        return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards),
+            np.array(next_states)
+        )
+    
+    def __len__(self):
+        """Trả về kích thước hiện tại của buffer"""
+        return len(self.buffer)
 
 # Chuyển state, action thành key
 def state_action_to_key(state, action):
@@ -57,18 +115,42 @@ def index_to_action(index):
         index = index // 3
     return action
 
-# ===== Định nghĩa kiến trúc mạng neural network mới =====
+# ===== Định nghĩa kiến trúc mạng neural network được cải thiện =====
 class QNetwork(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout_rate=0.2):
         super(QNetwork, self).__init__()
         self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
         self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
         
-        # Xây dựng mạng neural
+        # Xây dựng mạng neural với Batch Normalization tốt hơn
         self.fc1 = nn.Linear(self.state_dim, 128)
-        self.fc2 = nn.Linear(128, 64)
-        # Đầu ra có kích thước bằng số lượng action có thể
-        self.fc3 = nn.Linear(64, self.action_size)
+        self.bn1 = nn.BatchNorm1d(128)  # Sử dụng BatchNorm1d thay vì LayerNorm
+        self.dropout1 = nn.Dropout(dropout_rate)
+        
+        self.fc2 = nn.Linear(128, 128)  # Tăng kích thước layer thứ 2
+        self.bn2 = nn.BatchNorm1d(128)
+        self.dropout2 = nn.Dropout(dropout_rate)
+        
+        self.fc3 = nn.Linear(128, 64)
+        self.bn3 = nn.BatchNorm1d(64)
+        self.dropout3 = nn.Dropout(dropout_rate)
+        
+        # Đầu ra không cần BatchNorm và Dropout
+        self.fc4 = nn.Linear(64, self.action_size)
+        
+        # Khởi tạo trọng số
+        self._initialize_weights()
+        
+    def _initialize_weights(self):
+        """Khởi tạo trọng số theo phương pháp Xavier/He"""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
         
     def forward(self, state):
         """
@@ -76,18 +158,49 @@ class QNetwork(nn.Module):
         """
         # Chuyển state thành tensor và làm phẳng
         if not isinstance(state, torch.Tensor):
-            state = torch.FloatTensor(state.flatten()).unsqueeze(0) #thêm một chiều 
+            state = torch.FloatTensor(state.flatten())
+            if len(state.shape) == 1:
+                state = state.unsqueeze(0)  # Thêm batch dimension
+        elif len(state.shape) == 1:
+            state = state.unsqueeze(0)
         
-        x = F.relu(self.fc1(state)) #lan truyền thuận bằng hàm ReLu
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
+        # Đảm bảo state có đúng kích thước
+        if state.shape[-1] != self.state_dim:
+            state = state.view(-1, self.state_dim)
+        
+        # Forward pass với BatchNorm
+        x = self.fc1(state)
+        
+        # Chỉ áp dụng BatchNorm khi batch_size > 1
+        if x.shape[0] > 1:
+            x = self.bn1(x)
+        x = F.relu(x)
+        x = self.dropout1(x)
+        
+        x = self.fc2(x)
+        if x.shape[0] > 1:
+            x = self.bn2(x)
+        x = F.relu(x)
+        x = self.dropout2(x)
+        
+        x = self.fc3(x)
+        if x.shape[0] > 1:
+            x = self.bn3(x)
+        x = F.relu(x)
+        x = self.dropout3(x)
+        
+        # Layer cuối không có activation
+        x = self.fc4(x)
+        return x
     
     def get_q_value(self, state, action):
         """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
-        with torch.no_grad(): #tắt tính toán gradient cho dự đoán
-            q_values = self(state) #bản chất  self.__call__(input)
+        self.eval()  # Chuyển sang eval mode
+        with torch.no_grad():
+            q_values = self(state)
             action_idx = action_to_index(action)
-            return q_values[0, action_idx].item() 
+            return q_values[0, action_idx].item()
+
 
 # ===== Hàm xử lý bảng V và alpha =====
 def initialize_V():
@@ -113,118 +226,48 @@ def update_alpha(alpha, V, state, action):
     alpha[key] = 1.0 / V[key] if key in V and V[key] > 0 else 1.0 # anpha = 1 nếu chưa truy cập
     return alpha
 
-# ===== Lớp quản lý Q Networks với bảng V và alpha =====
-# ===== Cải tiến đơn giản cho QNetwork hiện tại =====
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import numpy as np
-
-class ImprovedQNetwork(nn.Module):
-    def __init__(self):
-        super(ImprovedQNetwork, self).__init__()
-        self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
-        self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
-        
-        # Xây dựng mạng neural với kiến trúc tốt hơn
-        self.fc1 = nn.Linear(self.state_dim, 256)  # Tăng từ 128 lên 256
-        self.bn1 = nn.BatchNorm1d(256)             # Thêm Batch Normalization
-        self.dropout1 = nn.Dropout(0.2)           # Thêm Dropout để tránh overfitting
-        
-        self.fc2 = nn.Linear(256, 128)             # Tăng từ 64 lên 128
-        self.bn2 = nn.BatchNorm1d(128)             # Batch Normalization
-        self.dropout2 = nn.Dropout(0.1)           # Dropout nhẹ hơn
-        
-        # Thêm một layer ẩn nữa để tăng khả năng học
-        self.fc3 = nn.Linear(128, 64)
-        self.bn3 = nn.BatchNorm1d(64)
-        
-        # Output layer
-        self.fc4 = nn.Linear(64, self.action_size)
-        
-        # Khởi tạo trọng số tốt hơn
-        self._initialize_weights()
-        
-    def _initialize_weights(self):
-        """Khởi tạo trọng số theo Xavier/He initialization"""
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)  # Xavier initialization
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
-    
-    def forward(self, state):
-        """
-        Nhận đầu vào là state, trả về Q-values cho tất cả action khả thi
-        """
-        # Chuyển state thành tensor và làm phẳng
-        if not isinstance(state, torch.Tensor):
-            state = torch.FloatTensor(state.flatten()).unsqueeze(0)
-        
-        # Layer 1
-        x = self.fc1(state)
-        x = self.bn1(x)
-        x = F.relu(x)
-        x = self.dropout1(x)
-        
-        # Layer 2  
-        x = self.fc2(x)
-        x = self.bn2(x)
-        x = F.relu(x)
-        x = self.dropout2(x)
-        
-        # Layer 3
-        x = self.fc3(x)
-        x = self.bn3(x)
-        x = F.relu(x)
-        
-        # Output layer (không có activation để có thể output âm/dương)
-        x = self.fc4(x)
-        
-        return x
-    
-    def get_q_value(self, state, action):
-        """Lấy Q-value cho một action cụ thể"""
-        with torch.no_grad():
-            q_values = self(state)
-            action_idx = action_to_index(action)
-            return q_values[0, action_idx].item()
-
-# ===== Cập nhật QNetworkManager với improvements =====
-class ImprovedQNetworkManager:
-    def __init__(self):
+# ===== Cải thiện QNetworkManager =====
+class QNetworkManager:
+    def __init__(self, learning_rate=0.001):  # Giảm learning rate
         # Khởi tạo I mạng neural network
         self.q_networks = []
         self.optimizers = []
+        self.schedulers = []  # Thêm learning rate scheduler
         
         for _ in range(I):
-            network = ImprovedQNetwork()
-            # Sử dụng AdamW thay vì Adam (tốt hơn cho regularization)
-            optimizer = optim.AdamW(
-                network.parameters(), 
-                lr=0.001,              # Learning rate thấp hơn cho stability
-                weight_decay=1e-4      # Weight decay cho regularization
-            )
+            network = QNetwork(dropout_rate=0.2)
+            optimizer = optim.Adam(network.parameters(), lr=learning_rate, weight_decay=1e-5)  # Thêm weight decay
+            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1000, gamma=0.95)  # LR decay
+            
             self.q_networks.append(network)
             self.optimizers.append(optimizer)
-        
-        # Thêm learning rate scheduler
-        self.schedulers = []
-        for optimizer in self.optimizers:
-            scheduler = optim.lr_scheduler.StepLR(
-                optimizer, 
-                step_size=2000,        # Giảm learning rate mỗi 2000 steps
-                gamma=0.95             # Giảm 5% mỗi lần
-            )
             self.schedulers.append(scheduler)
         
-        # Khởi tạo bảng V và alpha (giữ nguyên)
+        # Khởi tạo bảng V và alpha
         self.V = initialize_V()
         self.alpha = initialize_alpha()
+        
+        # Khởi tạo Replay Buffer cho từng mạng
+        self.replay_buffers = [ReplayBuffer(REPLAY_BUFFER_SIZE) for _ in range(I)]
+        
+        # Thêm target networks cho stable training
+        self.target_networks = []
+        self.target_update_freq = 100  # Cập nhật target network mỗi 100 steps
+        self.update_counter = 0
+        
+        for _ in range(I):
+            target_net = QNetwork(dropout_rate=0.2)
+            target_net.load_state_dict(self.q_networks[_].state_dict())
+            target_net.eval()  # Target network luôn ở eval mode
+            self.target_networks.append(target_net)
+    
+    def update_target_networks(self):
+        """Cập nhật target networks"""
+        for i in range(I):
+            self.target_networks[i].load_state_dict(self.q_networks[i].state_dict())
     
     def update_v_alpha(self, network_idx, state, action):
-        """Cập nhật bảng V và alpha cho cặp (state, action) - giữ nguyên"""
+        """Cập nhật bảng V và alpha cho cặp (state, action)"""
         self.V[network_idx] = update_V(self.V[network_idx], state, action)
         self.alpha[network_idx] = update_alpha(
             self.alpha[network_idx], 
@@ -235,10 +278,15 @@ class ImprovedQNetworkManager:
     
     def compute_risk_averse_Q(self, random_idx, state):
         """
-        Tính Q risk-averse cho tất cả action theo công thức 22 - giữ nguyên logic
+        Tính Q risk-averse cho tất cả action theo công thức 22
+        Q̂(s,a) = Q_H(s,a) - λ_p * sqrt(Var[Q(s,a)])
         """
         # Chuyển state thành tensor
         state_tensor = torch.FloatTensor(state.flatten()).unsqueeze(0)
+        
+        # Đặt tất cả mạng ở eval mode cho inference
+        for net in self.q_networks:
+            net.eval()
         
         # Lấy Q-values từ mạng được chọn ngẫu nhiên H
         with torch.no_grad():
@@ -265,7 +313,7 @@ class ImprovedQNetworkManager:
         return risk_averse_q
     
     def choose_action(self, state, epsilon, H):
-        """Chọn action theo epsilon-greedy với Q risk-averse - giữ nguyên logic"""
+        """Chọn action theo epsilon-greedy với Q risk-averse"""
         if random.random() < epsilon:
             return np.random.randint(0, 3, NUM_DEVICES)
         
@@ -278,55 +326,73 @@ class ImprovedQNetworkManager:
         return index_to_action(best_action_idx)
     
     def update_q_network(self, network_idx, state, action, reward, next_state):
-        """
-        Cập nhật Q-network theo công thức 23 - cải tiến training process
-        """
+        """Cập nhật Q-network với target network"""
         # 1. Cập nhật V và alpha
         self.update_v_alpha(network_idx, state, action)
         
-        # 2. Lấy network và optimizer tương ứng
+        # 2. Thêm trải nghiệm vào buffer
+        self.replay_buffers[network_idx].add(state, action, reward, next_state)
+        
+        # 3. Nếu buffer đủ lớn, tiến hành học từ mini-batch
+        if len(self.replay_buffers[network_idx]) >= MIN_REPLAY_SIZE:
+            self.learn_from_replay_buffer(network_idx)
+            
+        # 4. Cập nhật target networks định kỳ
+        self.update_counter += 1
+        if self.update_counter % self.target_update_freq == 0:
+            self.update_target_networks()
+    
+    def learn_from_replay_buffer(self, network_idx):
+        """Học từ replay buffer với target network và gradient clipping"""
+        # 1. Lấy mạng và optimizer tương ứng
         network = self.q_networks[network_idx]
+        target_network = self.target_networks[network_idx]
         optimizer = self.optimizers[network_idx]
         scheduler = self.schedulers[network_idx]
         
-        # 3. Set network to training mode (quan trọng cho BatchNorm và Dropout)
+        # Đặt network ở training mode
         network.train()
         
-        # 4. Chuyển state thành tensor
-        state_tensor = torch.FloatTensor(state.flatten()).unsqueeze(0)
-        next_state_tensor = torch.FloatTensor(next_state.flatten()).unsqueeze(0)
+        # 2. Lấy mẫu ngẫu nhiên từ replay buffer
+        states, actions, rewards, next_states = self.replay_buffers[network_idx].sample(BATCH_SIZE)
         
-        # 5. Tính Q-values hiện tại
-        q_values = network(state_tensor)
-        action_idx = action_to_index(action)
-        current_q = q_values[0, action_idx]
+        # 3. Chuyển dữ liệu sang tensor
+        states_tensor = torch.FloatTensor(states.reshape(BATCH_SIZE, -1))
+        next_states_tensor = torch.FloatTensor(next_states.reshape(BATCH_SIZE, -1))
+        rewards_tensor = torch.FloatTensor(rewards)
         
-        # 6. Tính max Q-value cho next state (set to eval mode để tắt dropout)
-        network.eval()
+        # 4. Tính Q-values hiện tại
+        current_q_values = network(states_tensor)
+        
+        # 5. Tính target Q-values sử dụng target network
         with torch.no_grad():
-            next_q_values = network(next_state_tensor)
-            max_next_q = torch.max(next_q_values).item()
-        network.train()  # Trở lại training mode
+            target_network.eval()
+            next_q_values = target_network(next_states_tensor)
+            max_next_q = torch.max(next_q_values, dim=1)[0]
         
-        # 7. Tính TD error: r + γ*max_a'Q(s',a') - Q(s,a)
-        td_error = reward + GAMMA * max_next_q - current_q.item()
+        # 6. Khởi tạo target Q-values
+        target_q_values = current_q_values.clone().detach()
         
-        # 8. Tính utility: u(TD error) - x_0
-        utility_value = u(td_error) - X0
+        # 7. Cập nhật target Q-values cho từng mẫu
+        for idx in range(BATCH_SIZE):
+            action_idx = action_to_index(actions[idx])
+            
+            # Lấy alpha từ bảng
+            key = state_action_to_key(states[idx], actions[idx])
+            alpha_value = self.alpha[network_idx].get(key, 1.0)
+            
+            # Tính TD error
+            td_error = rewards_tensor[idx] + GAMMA * max_next_q[idx] - current_q_values[idx, action_idx]
+            
+            # Tính utility
+            utility_value = u(td_error.item()) - X0
+            
+            # Cập nhật target Q-value
+            target_q_values[idx, action_idx] = current_q_values[idx, action_idx] + alpha_value * utility_value
         
-        # 9. Lấy alpha từ bảng
-        key = state_action_to_key(state, action)
-        alpha_value = self.alpha[network_idx].get(key, 1.0)
+        # 8. Tính loss và cập nhật mạng với gradient clipping
+        loss = F.mse_loss(current_q_values, target_q_values)
         
-        # 10. Tạo target Q-values
-        target_q_values = q_values.clone().detach()
-        target_q_values[0, action_idx] = current_q + alpha_value * utility_value
-        
-        # 11. Tính loss và cập nhật network
-        loss = F.mse_loss(q_values[0, action_idx:action_idx+1], 
-                         target_q_values[0, action_idx:action_idx+1])
-        
-        # 12. Backpropagation với gradient clipping
         optimizer.zero_grad()
         loss.backward()
         
@@ -334,18 +400,7 @@ class ImprovedQNetworkManager:
         torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
         
         optimizer.step()
-        
-        # 13. Cập nhật learning rate schedule
-        scheduler.step()
-        
-        # 14. Set về eval mode sau khi training
-        network.eval()
-
-# ===== Hàm helper để thay thế trong main code =====
-def create_improved_q_manager():
-    """Tạo improved Q manager - chỉ cần thay thế 1 dòng trong main"""
-    return ImprovedQNetworkManager()
-
+        scheduler.step()  # Cập nhật learning rate
 
 # Các hàm khởi tạo và cập nhật state
 def initialize_state():
@@ -515,7 +570,8 @@ def compute_reward(state, num_of_send_packet, num_of_received_packet, old_reward
 # Chương trình chính
 if __name__ == "__main__":
     # Khởi tạo manager cho các Q-Networks
-    q_manager = create_improved_q_manager()
+    q_manager = QNetworkManager()
+    
     # Khởi tạo môi trường
     device_positions = env.initialize_pos_of_devices()
     state = initialize_state()
@@ -526,7 +582,7 @@ if __name__ == "__main__":
     
     # Tạo h_base cho mỗi frame
     h_base = create_h_base(NUM_OF_FRAME + 1)
-    h_base_t = h_base[0] #hệ số phai mờ kênh cho sub-6GHz
+    h_base_t = h_base[0]
     average_r = compute_r(device_positions, h_base_t, allocation=allocate(action), frame=1)
     
     # Các biến lưu kết quả
@@ -537,10 +593,12 @@ if __name__ == "__main__":
     rate_plot = []
     number_of_received_packet_plot = []
     number_of_send_packet_plot = []
+    
     # Vòng lặp chính
     for frame in range(1, NUM_OF_FRAME + 1):
         # Cập nhật epsilon
-        EPSILON = EPSILON * LAMBDA
+        # EPSILON = EPSILON * LAMBDA
+        EPSILON = max(EPS_END, EPSILON * LAMBDA)
         
         # Thiết lập môi trường
         h_base_t = h_base[frame]
@@ -599,12 +657,12 @@ if __name__ == "__main__":
         if frame % 100 == 0:
             print(f"Frame {frame}: Reward = {reward_value}")
             print(f"PLR = {packet_loss_rate}")
+            print(f"Replay buffer size: {[len(buf) for buf in q_manager.replay_buffers]}")
     
 
-    #===Avg reward ====
+
     total_reward = np.sum(reward_plot)
     print("Avg reward:", total_reward/10000)
-    # ==== Avg success =====
     total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
     total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
     print("Avg success:", total_received/total_send)
@@ -621,7 +679,6 @@ if __name__ == "__main__":
     avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
 
     print("Avg plr_total_of_device:", avg_plr_total_of_device)
-
     # tunable_parameters = {
     # 'h_base_sub6': h_base_t,
     # 'state': state_plot,
@@ -635,12 +692,12 @@ if __name__ == "__main__":
     # 'Avg success': total_received/total_send,
     # }
 
-    # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_03')
+    # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_04')
 
     # # Vẽ đồ thị reward
     # plt.figure(figsize=(12, 6))
     # plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-    # plt.title('Biểu đồ Reward theo từng Frame')
+    # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
     # plt.xlabel('Frame')
     # plt.ylabel('Reward')
     # plt.grid(True)
@@ -660,10 +717,10 @@ if __name__ == "__main__":
     #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
     #     plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
     
-    # # 👉 Thêm đường chuẩn y = 0.1
+    # # Thêm đường chuẩn y = 0.1
     # plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
 
-    # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame')
+    # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
     # plt.xlabel('Frame')
     # plt.ylabel('PLR')
     # plt.grid(True)
@@ -695,7 +752,7 @@ if __name__ == "__main__":
     # plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
 
     # plt.ylabel('Ratio (%)')
-    # plt.title('Interface usage distribution per device, scenario 1')
+    # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
     # plt.xticks(x, labels)
     # plt.ylim(0, 100)
     # plt.legend()
