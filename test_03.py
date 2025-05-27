@@ -10,9 +10,9 @@ import random
 from collections import defaultdict
 
 # Hyperparameters
-NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 16  # Số beam mmWave (M)
+NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -59,28 +59,47 @@ def index_to_action(index):
 
 # ===== Định nghĩa kiến trúc mạng neural network mới =====
 class QNetwork(nn.Module):
+    # def __init__(self):
+    #     super(QNetwork, self).__init__()
+    #     self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
+    #     self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
+        
+    #     # Xây dựng mạng neural
+    #     self.fc1 = nn.Linear(self.state_dim, 128)
+    #     self.fc2 = nn.Linear(128, 64)
+    #     # Đầu ra có kích thước bằng số lượng action có thể
+    #     self.fc3 = nn.Linear(64, self.action_size)
+        
+    # def forward(self, state):
+    #     """
+    #     Nhận đầu vào là state, trả về Q-values cho tất cả action khả thi
+    #     """
+    #     # Chuyển state thành tensor và làm phẳng
+    #     if not isinstance(state, torch.Tensor):
+    #         state = torch.FloatTensor(state.flatten()).unsqueeze(0) #thêm một chiều 
+        
+    #     x = F.relu(self.fc1(state)) #lan truyền thuận bằng hàm ReLu
+    #     x = F.relu(self.fc2(x))
+    #     return self.fc3(x)
     def __init__(self):
         super(QNetwork, self).__init__()
-        self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
-        self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
+        self.state_dim = NUM_DEVICES * 4
+        self.action_size = 3**NUM_DEVICES
         
-        # Xây dựng mạng neural
-        self.fc1 = nn.Linear(self.state_dim, 128)
-        self.fc2 = nn.Linear(128, 64)
-        # Đầu ra có kích thước bằng số lượng action có thể
-        self.fc3 = nn.Linear(64, self.action_size)
+        # Tăng số nơ-ron và thêm tầng
+        self.fc1 = nn.Linear(self.state_dim, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 64)
+        self.fc4 = nn.Linear(64, self.action_size)
         
     def forward(self, state):
-        """
-        Nhận đầu vào là state, trả về Q-values cho tất cả action khả thi
-        """
-        # Chuyển state thành tensor và làm phẳng
         if not isinstance(state, torch.Tensor):
-            state = torch.FloatTensor(state.flatten()).unsqueeze(0) #thêm một chiều 
+            state = torch.FloatTensor(state.flatten()).unsqueeze(0)
         
-        x = F.relu(self.fc1(state)) #lan truyền thuận bằng hàm ReLu
+        x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        return self.fc3(x)
+        x = F.relu(self.fc3(x))
+        return self.fc4(x)
     
     def get_q_value(self, state, action):
         """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""

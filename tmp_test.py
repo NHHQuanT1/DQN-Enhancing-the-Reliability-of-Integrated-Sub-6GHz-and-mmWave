@@ -32,7 +32,7 @@ X0 = 1
 # Tham số mới cho Replay Buffer
 REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
 BATCH_SIZE = 32               # Kích thước batch để học
-MIN_REPLAY_SIZE = 1000        # Kích thước tối thiểu để bắt đầu học
+MIN_REPLAY_SIZE = 500        # Kích thước tối thiểu để bắt đầu học
 
 # ===== Định nghĩa lớp ReplayBuffer =====
 class ReplayBuffer:
@@ -115,27 +115,24 @@ def index_to_action(index):
         index = index // 3
     return action
 
-# ===== Định nghĩa kiến trúc mạng neural network được cải thiện =====
+# ===== Định nghĩa kiến trúc mạng neural network đã loại bỏ dropout =====
 class QNetwork(nn.Module):
-    def __init__(self, dropout_rate=0.2):
+    def __init__(self):
         super(QNetwork, self).__init__()
         self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
         self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
         
-        # Xây dựng mạng neural với Batch Normalization tốt hơn
+        # Xây dựng mạng neural với Batch Normalization (đã loại bỏ dropout)
         self.fc1 = nn.Linear(self.state_dim, 128)
         self.bn1 = nn.BatchNorm1d(128)  # Sử dụng BatchNorm1d thay vì LayerNorm
-        self.dropout1 = nn.Dropout(dropout_rate)
         
         self.fc2 = nn.Linear(128, 128)  # Tăng kích thước layer thứ 2
         self.bn2 = nn.BatchNorm1d(128)
-        self.dropout2 = nn.Dropout(dropout_rate)
         
         self.fc3 = nn.Linear(128, 64)
         self.bn3 = nn.BatchNorm1d(64)
-        self.dropout3 = nn.Dropout(dropout_rate)
         
-        # Đầu ra không cần BatchNorm và Dropout
+        # Đầu ra không cần BatchNorm
         self.fc4 = nn.Linear(64, self.action_size)
         
         # Khởi tạo trọng số
@@ -168,26 +165,23 @@ class QNetwork(nn.Module):
         if state.shape[-1] != self.state_dim:
             state = state.view(-1, self.state_dim)
         
-        # Forward pass với BatchNorm
+        # Forward pass với BatchNorm (đã loại bỏ dropout)
         x = self.fc1(state)
         
         # Chỉ áp dụng BatchNorm khi batch_size > 1
         if x.shape[0] > 1:
             x = self.bn1(x)
         x = F.relu(x)
-        x = self.dropout1(x)
         
         x = self.fc2(x)
         if x.shape[0] > 1:
             x = self.bn2(x)
         x = F.relu(x)
-        x = self.dropout2(x)
         
         x = self.fc3(x)
         if x.shape[0] > 1:
             x = self.bn3(x)
         x = F.relu(x)
-        x = self.dropout3(x)
         
         # Layer cuối không có activation
         x = self.fc4(x)
@@ -226,7 +220,7 @@ def update_alpha(alpha, V, state, action):
     alpha[key] = 1.0 / V[key] if key in V and V[key] > 0 else 1.0 # anpha = 1 nếu chưa truy cập
     return alpha
 
-# ===== Cải thiện QNetworkManager =====
+# ===== Cải thiện QNetworkManager (đã loại bỏ dropout) =====
 class QNetworkManager:
     def __init__(self, learning_rate=0.001):  # Giảm learning rate
         # Khởi tạo I mạng neural network
@@ -235,7 +229,7 @@ class QNetworkManager:
         self.schedulers = []  # Thêm learning rate scheduler
         
         for _ in range(I):
-            network = QNetwork(dropout_rate=0.3)
+            network = QNetwork()  # Đã loại bỏ tham số dropout_rate
             optimizer = optim.Adam(network.parameters(), lr=learning_rate, weight_decay=1e-5)  # Thêm weight decay
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.95)  # LR decay
             
@@ -256,7 +250,7 @@ class QNetworkManager:
         self.update_counter = 0
         
         for _ in range(I):
-            target_net = QNetwork(dropout_rate=0.3)
+            target_net = QNetwork()  # Đã loại bỏ tham số dropout_rate
             target_net.load_state_dict(self.q_networks[_].state_dict())
             target_net.eval()  # Target network luôn ở eval mode
             self.target_networks.append(target_net)
@@ -342,12 +336,12 @@ class QNetworkManager:
             self.learn_from_replay_buffer(network_idx)
             
         # 4. Cập nhật target networks định kỳ
-        self.update_counter += 1 #so lan cap nhat target_networks
+        self.update_counter += 1
         if self.update_counter % self.target_update_freq == 0:
             self.update_target_networks()
     
     def learn_from_replay_buffer(self, network_idx):
-        """Học từ replay buffer với target network và gradient clipping"""
+        """Học từ replay buffer với target network và gradient clipping (đã loại bỏ dropout)"""
         # 1. Lấy mạng và optimizer tương ứng
         network = self.q_networks[network_idx]
         target_network = self.target_networks[network_idx]
@@ -603,10 +597,7 @@ if __name__ == "__main__":
         # Cập nhật epsilon
         # EPSILON = EPSILON * LAMBDA
         EPSILON = max(EPS_END, EPSILON * LAMBDA)
-        # if frame > 1000:
-        #     EPSILON = max(EPS_END, EPSILON * LAMBDA)
-        # else: 
-        #     EPSILON = 1
+        
         # Thiết lập môi trường
         h_base_t = h_base[frame]
         
@@ -701,68 +692,68 @@ if __name__ == "__main__":
 
     # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_04')
 
-    # Vẽ đồ thị reward
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-    plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
-    plt.xlabel('Frame')
-    plt.ylabel('Reward')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    # # Vẽ đồ thị reward
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
+    # plt.xlabel('Frame')
+    # plt.ylabel('Reward')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
     
-    # Vẽ đồ thị PLR
-    packet_loss_rate_plot = np.array(packet_loss_rate_plot)
-    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
-    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+    # # Vẽ đồ thị PLR
+    # packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+    # frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+    # plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
 
     
-    plt.figure(figsize=(12, 6))
-    for device_idx in range(NUM_DEVICES):
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
-        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    # plt.figure(figsize=(12, 6))
+    # for device_idx in range(NUM_DEVICES):
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+    #     plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
     
-    # Thêm đường chuẩn y = 0.1
-    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+    # # Thêm đường chuẩn y = 0.1
+    # plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
 
-    plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
-    plt.xlabel('Frame')
-    plt.ylabel('PLR')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
+    # plt.xlabel('Frame')
+    # plt.ylabel('PLR')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
 
-    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
-    # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
-    action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
-    num_frames, num_devices = action_array.shape
-    # Chuẩn bị mảng lưu phần trăm
-    # shape: (3 hành động, num_devices)
-    percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
+    # # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+    # action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+    # num_frames, num_devices = action_array.shape
+    # # Chuẩn bị mảng lưu phần trăm
+    # # shape: (3 hành động, num_devices)
+    # percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
 
-    # Tính phần trăm cho từng hành động theo từng thiết bị
-    for action in [0, 1, 2]:
-        # Đếm số lần action xuất hiện ở từng cột (thiết bị)
-        counts = np.sum(action_array == action, axis=0)
-        percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
+    # # Tính phần trăm cho từng hành động theo từng thiết bị
+    # for action in [0, 1, 2]:
+    #     # Đếm số lần action xuất hiện ở từng cột (thiết bị)
+    #     counts = np.sum(action_array == action, axis=0)
+    #     percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
 
-    labels = [f'Device {i+1}' for i in range(num_devices)]
-    x = np.arange(num_devices)  # Vị trí cột
-    width = 0.25  # Độ rộng của mỗi nhóm cột
+    # labels = [f'Device {i+1}' for i in range(num_devices)]
+    # x = np.arange(num_devices)  # Vị trí cột
+    # width = 0.25  # Độ rộng của mỗi nhóm cột
 
-    plt.figure(figsize=(10, 6))
-    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
-    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
-    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+    # plt.figure(figsize=(10, 6))
+    # plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+    # plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+    # plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
 
-    plt.ylabel('Ratio (%)')
-    plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
-    plt.xticks(x, labels)
-    plt.ylim(0, 100)
-    plt.legend()
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.show()
+    # plt.ylabel('Ratio (%)')
+    # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
+    # plt.xticks(x, labels)
+    # plt.ylim(0, 100)
+    # plt.legend()
+    # plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    # plt.tight_layout()
+    # plt.show()

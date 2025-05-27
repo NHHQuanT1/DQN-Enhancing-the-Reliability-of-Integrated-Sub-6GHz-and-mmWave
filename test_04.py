@@ -10,9 +10,9 @@ import random
 from collections import defaultdict, deque
 
 # Hyperparameters
-NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 16  # Số beam mmWave (M)
+NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 3  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 3  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -31,8 +31,8 @@ X0 = 1
 
 # Tham số mới cho Replay Buffer
 REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
-BATCH_SIZE = 32               # Kích thước batch để học
-MIN_REPLAY_SIZE = 1000        # Kích thước tối thiểu để bắt đầu học
+BATCH_SIZE = 128               # Kích thước batch để học
+MIN_REPLAY_SIZE = 500        # Kích thước tối thiểu để bắt đầu học
 
 # ===== Định nghĩa lớp ReplayBuffer =====
 class ReplayBuffer:
@@ -124,7 +124,9 @@ class QNetwork(nn.Module):
         
         # Xây dựng mạng neural
         self.fc1 = nn.Linear(self.state_dim, 128)
+        self.bn1 = nn.LayerNorm(128)
         self.fc2 = nn.Linear(128, 64)
+        self.bn2 = nn.LayerNorm(64)
         # Đầu ra có kích thước bằng số lượng action có thể
         self.fc3 = nn.Linear(64, self.action_size)
         
@@ -136,8 +138,15 @@ class QNetwork(nn.Module):
         if not isinstance(state, torch.Tensor):
             state = torch.FloatTensor(state.flatten()).unsqueeze(0) #thêm một chiều 
         
-        x = F.relu(self.fc1(state)) #lan truyền thuận bằng hàm ReLu
-        x = F.relu(self.fc2(x))
+        # x = F.relu(self.fc1(state)) #lan truyền thuận bằng hàm ReLu
+        # x = F.relu(self.fc2(x))
+        x = self.fc1(state)
+        x = self.bn1(x)
+        x = F.relu(x)
+
+        x = self.fc2(x)
+        x = self.bn2(x)
+        x = F.relu(x)
         return self.fc3(x)
     
     def get_q_value(self, state, action):
@@ -213,6 +222,8 @@ class QNetworkManager:
         with torch.no_grad():
             q_random = self.q_networks[random_idx](state_tensor)
         
+        ## su dung mang hien tai duoc lua chon de cap nhat
+
         # Tính Q-values trung bình từ tất cả mạng
         q_avg = torch.zeros_like(q_random)
         for i in range(I):
@@ -507,7 +518,8 @@ if __name__ == "__main__":
     # Vòng lặp chính
     for frame in range(1, NUM_OF_FRAME + 1):
         # Cập nhật epsilon
-        EPSILON = EPSILON * LAMBDA
+        # EPSILON = EPSILON * LAMBDA
+        EPSILON = max(EPS_END, EPSILON * LAMBDA)
         
         # Thiết lập môi trường
         h_base_t = h_base[frame]
