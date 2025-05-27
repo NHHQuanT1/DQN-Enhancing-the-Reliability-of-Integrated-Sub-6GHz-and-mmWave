@@ -125,15 +125,15 @@ class QNetwork(nn.Module):
         # Xây dựng mạng neural với Batch Normalization tốt hơn
         self.fc1 = nn.Linear(self.state_dim, 128)
         self.bn1 = nn.BatchNorm1d(128)  # Sử dụng BatchNorm1d thay vì LayerNorm
-        self.dropout1 = nn.Dropout(dropout_rate)
+        # self.dropout1 = nn.Dropout(dropout_rate)
         
         self.fc2 = nn.Linear(128, 128)  # Tăng kích thước layer thứ 2
         self.bn2 = nn.BatchNorm1d(128)
-        self.dropout2 = nn.Dropout(dropout_rate)
+        # self.dropout2 = nn.Dropout(dropout_rate)
         
         self.fc3 = nn.Linear(128, 64)
         self.bn3 = nn.BatchNorm1d(64)
-        self.dropout3 = nn.Dropout(dropout_rate)
+        # self.dropout3 = nn.Dropout(dropout_rate)
         
         # Đầu ra không cần BatchNorm và Dropout
         self.fc4 = nn.Linear(64, self.action_size)
@@ -175,19 +175,19 @@ class QNetwork(nn.Module):
         if x.shape[0] > 1:
             x = self.bn1(x)
         x = F.relu(x)
-        x = self.dropout1(x)
+        # x = self.dropout1(x)
         
         x = self.fc2(x)
         if x.shape[0] > 1:
             x = self.bn2(x)
         x = F.relu(x)
-        x = self.dropout2(x)
+        # x = self.dropout2(x)
         
         x = self.fc3(x)
         if x.shape[0] > 1:
             x = self.bn3(x)
         x = F.relu(x)
-        x = self.dropout3(x)
+        # x = self.dropout3(x)
         
         # Layer cuối không có activation
         x = self.fc4(x)
@@ -235,7 +235,8 @@ class QNetworkManager:
         self.schedulers = []  # Thêm learning rate scheduler
         
         for _ in range(I):
-            network = QNetwork(dropout_rate=0.3)
+            # network = QNetwork(dropout_rate=0.2)
+            network = QNetwork()
             optimizer = optim.Adam(network.parameters(), lr=learning_rate, weight_decay=1e-5)  # Thêm weight decay
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.95)  # LR decay
             
@@ -255,8 +256,9 @@ class QNetworkManager:
         self.target_update_freq = 100  # Cập nhật target network mỗi 100 steps
         self.update_counter = 0
         
-        for _ in range(I):
-            target_net = QNetwork(dropout_rate=0.3)
+        for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng
+            # target_net = QNetwork(dropout_rate=0.2)
+            target_net = QNetwork()
             target_net.load_state_dict(self.q_networks[_].state_dict())
             target_net.eval()  # Target network luôn ở eval mode
             self.target_networks.append(target_net)
@@ -325,7 +327,7 @@ class QNetworkManager:
         # Tính Q risk-averse cho tất cả action
         risk_averse_q = self.compute_risk_averse_Q(random_idx, state)
         
-        # Chọn action với Q risk-averse cao nhất
+        # Chọn action với Q risk-averse cao nhất được tính từ target_network được chọn ngẫu nhiên ra
         best_action_idx = torch.argmax(risk_averse_q).item()
         return index_to_action(best_action_idx)
     
