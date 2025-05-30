@@ -31,10 +31,10 @@ X0 = 1
 
 # Tham số mới cho Replay Buffer
 REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
-BATCH_SIZE = 32               # Kích thước batch để học
+BATCH_SIZE = 64               # Kích thước batch để học
 MIN_REPLAY_SIZE = 1000        # Kích thước tối thiểu để bắt đầu học
 # Tham số cho Target Network
-TARGET_UPDATE_FREQ = 10  # Cập nhật target network mỗi 100 frames
+TARGET_UPDATE_FREQ = 100  # Cập nhật target network mỗi 100 frames
 
 # ===== Định nghĩa lớp ReplayBuffer =====
 class ReplayBuffer:
@@ -125,12 +125,12 @@ class QNetwork(nn.Module):
         self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
         
         # Xây dựng mạng neural
-        self.fc1 = nn.Linear(self.state_dim, 128)
+        self.fc1 = nn.Linear(self.state_dim, 256)
         # self.bn1 = nn.LayerNorm(128)
-        self.fc2 = nn.Linear(128, 64)
+        self.fc2 = nn.Linear(256, 128)
         # self.bn2 = nn.LayerNorm(64)
         # Đầu ra có kích thước bằng số lượng action có thể
-        self.fc3 = nn.Linear(64, self.action_size)
+        self.fc3 = nn.Linear(128, self.action_size)
         
     def forward(self, state):
         """
@@ -643,68 +643,68 @@ if __name__ == "__main__":
 
     # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_04')
 
-    # # Vẽ đồ thị reward
-    # plt.figure(figsize=(12, 6))
-    # plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-    # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
-    # plt.xlabel('Frame')
-    # plt.ylabel('Reward')
-    # plt.grid(True)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.show()
+    # Vẽ đồ thị reward
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
+    plt.xlabel('Frame')
+    plt.ylabel('Reward')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
     
-    # # Vẽ đồ thị PLR
-    # packet_loss_rate_plot = np.array(packet_loss_rate_plot)
-    # frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
-    # plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+    # Vẽ đồ thị PLR
+    packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
 
     
-    # plt.figure(figsize=(12, 6))
-    # for device_idx in range(NUM_DEVICES):
-    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
-    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
-    #     plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    plt.figure(figsize=(12, 6))
+    for device_idx in range(NUM_DEVICES):
+        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
     
-    # # Thêm đường chuẩn y = 0.1
-    # plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+    # Thêm đường chuẩn y = 0.1
+    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
 
-    # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
-    # plt.xlabel('Frame')
-    # plt.ylabel('PLR')
-    # plt.grid(True)
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.show()
+    plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
+    plt.xlabel('Frame')
+    plt.ylabel('PLR')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
-    # # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
-    # # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
-    # action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
-    # num_frames, num_devices = action_array.shape
-    # # Chuẩn bị mảng lưu phần trăm
-    # # shape: (3 hành động, num_devices)
-    # percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
+    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+    action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+    num_frames, num_devices = action_array.shape
+    # Chuẩn bị mảng lưu phần trăm
+    # shape: (3 hành động, num_devices)
+    percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
 
-    # # Tính phần trăm cho từng hành động theo từng thiết bị
-    # for action in [0, 1, 2]:
-    #     # Đếm số lần action xuất hiện ở từng cột (thiết bị)
-    #     counts = np.sum(action_array == action, axis=0)
-    #     percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
+    # Tính phần trăm cho từng hành động theo từng thiết bị
+    for action in [0, 1, 2]:
+        # Đếm số lần action xuất hiện ở từng cột (thiết bị)
+        counts = np.sum(action_array == action, axis=0)
+        percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
 
-    # labels = [f'Device {i+1}' for i in range(num_devices)]
-    # x = np.arange(num_devices)  # Vị trí cột
-    # width = 0.25  # Độ rộng của mỗi nhóm cột
+    labels = [f'Device {i+1}' for i in range(num_devices)]
+    x = np.arange(num_devices)  # Vị trí cột
+    width = 0.25  # Độ rộng của mỗi nhóm cột
 
-    # plt.figure(figsize=(10, 6))
-    # plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
-    # plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
-    # plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+    plt.figure(figsize=(10, 6))
+    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
 
-    # plt.ylabel('Ratio (%)')
-    # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
-    # plt.xticks(x, labels)
-    # plt.ylim(0, 100)
-    # plt.legend()
-    # plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-    # plt.tight_layout()
-    # plt.show()
+    plt.ylabel('Ratio (%)')
+    plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
+    plt.xticks(x, labels)
+    plt.ylim(0, 100)
+    plt.legend()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.show()

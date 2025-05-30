@@ -8,6 +8,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 from collections import defaultdict, deque
+import os
 
 # Hyperparameters
 NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
@@ -31,8 +32,8 @@ X0 = 1
 
 # Tham số mới cho Replay Buffer
 REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
-BATCH_SIZE = 32               # Kích thước batch để học
-MIN_REPLAY_SIZE = 1000        # Kích thước tối thiểu để bắt đầu học
+BATCH_SIZE = 64               # Kích thước batch để học
+MIN_REPLAY_SIZE = 500        # Kích thước tối thiểu để bắt đầu học
 
 # ===== Định nghĩa lớp ReplayBuffer =====
 class ReplayBuffer:
@@ -60,7 +61,7 @@ class ReplayBuffer:
         batch_size = min(batch_size, len(self.buffer))
         
         # Lấy mẫu ngẫu nhiên các chỉ số
-        indices = np.random.choice(len(self.buffer), batch_size, replace=False)
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False) # chọn ngẫu nhiên mà không có lặp lại
         
         # Lấy dữ liệu từ các chỉ số đã chọn
         states = []
@@ -124,7 +125,7 @@ class QNetwork(nn.Module):
         
         # Xây dựng mạng neural với Batch Normalization tốt hơn
         self.fc1 = nn.Linear(self.state_dim, 128)
-        self.bn1 = nn.BatchNorm1d(128)  # Sử dụng BatchNorm1d thay vì LayerNorm
+        self.bn1 = nn.BatchNorm1d(128)  
         # self.dropout1 = nn.Dropout(dropout_rate)
         
         self.fc2 = nn.Linear(128, 128)  # Tăng kích thước layer thứ 2
@@ -139,13 +140,23 @@ class QNetwork(nn.Module):
         self.fc4 = nn.Linear(64, self.action_size)
         
         # Khởi tạo trọng số
-        self._initialize_weights()
+        self.initialize_weights()
         
-    def _initialize_weights(self):
-        """Khởi tạo trọng số theo phương pháp Xavier/He"""
+    # def _initialize_weights(self):
+    #     """Khởi tạo trọng số theo phương pháp Xavier/He"""
+    #     for m in self.modules():
+    #         if isinstance(m, nn.Linear):
+    #             nn.init.xavier_uniform_(m.weight)
+    #             if m.bias is not None:
+    #                 nn.init.constant_(m.bias, 0)
+    #         elif isinstance(m, nn.BatchNorm1d):
+    #             nn.init.constant_(m.weight, 1)
+    #             nn.init.constant_(m.bias, 0)
+    def initialize_weights(self):
+        """Khởi tạo trọng số theo He (Kaiming) Initialization"""
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
+                nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.BatchNorm1d):
@@ -235,10 +246,10 @@ class QNetworkManager:
         self.schedulers = []  # Thêm learning rate scheduler
         
         for _ in range(I):
-            # network = QNetwork(dropout_rate=0.2)
+            # network = QNetwork(dropout_rate=0.01)
             network = QNetwork()
             optimizer = optim.Adam(network.parameters(), lr=learning_rate, weight_decay=1e-5)  # Thêm weight decay
-            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.95)  # LR decay
+            scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.95)  # LR decay, học sau 500 step và giảm 5%
             
             self.q_networks.append(network)
             self.optimizers.append(optimizer)
@@ -257,7 +268,7 @@ class QNetworkManager:
         self.update_counter = 0
         
         for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng
-            # target_net = QNetwork(dropout_rate=0.2)
+            # target_net = QNetwork(dropout_rate=0.01)
             target_net = QNetwork()
             target_net.load_state_dict(self.q_networks[_].state_dict())
             target_net.eval()  # Target network luôn ở eval mode
@@ -278,7 +289,7 @@ class QNetworkManager:
             action
         )
     
-    def compute_risk_averse_Q(self, random_idx, state):
+    def compute_risk_averse_Q(self, random_idx, state): #tính giá trị risk_averse được lấy từ các mạng chính
         """
         Tính Q risk-averse cho tất cả action theo công thức 22
         Q̂(s,a) = Q_H(s,a) - λ_p * sqrt(Var[Q(s,a)])
@@ -292,17 +303,13 @@ class QNetworkManager:
         
         # Lấy Q-values từ mạng được chọn ngẫu nhiên H
         with torch.no_grad():
-            # q_random = self.q_networks[random_idx](state_tensor)
-            q_random = self.target_networks[random_idx](state_tensor)
-
+            q_random = self.q_networks[random_idx](state_tensor)
         
         # Tính Q-values trung bình từ tất cả mạng
         q_avg = torch.zeros_like(q_random)
         for i in range(I):
             with torch.no_grad():
-                # q_avg += self.q_networks[i](state_tensor)
-                q_avg += self.target_networks[i](state_tensor)
-
+                q_avg += self.q_networks[i](state_tensor)
         q_avg /= I
         
         # Tính tổng bình phương độ lệch
@@ -324,7 +331,7 @@ class QNetworkManager:
             return np.random.randint(0, 3, NUM_DEVICES)
         
         random_idx = H
-        # Tính Q risk-averse cho tất cả action
+        # Tính Q risk-averse tại action để lựa ra action có giá trị lớn nhất
         risk_averse_q = self.compute_risk_averse_Q(random_idx, state)
         
         # Chọn action với Q risk-averse cao nhất được tính từ target_network được chọn ngẫu nhiên ra
@@ -587,6 +594,13 @@ if __name__ == "__main__":
     packet_loss_rate = np.zeros(shape=(NUM_DEVICES, 2))
     
     # Tạo h_base cho mỗi frame
+    # Kiểm tra và đọc/tạo h_base
+    # if os.path.exists('h_base_data.npz'):
+    #     with np.load('h_base_data.npz', allow_pickle=True) as data:
+    #         h_base = data['h_base'].tolist()
+    # else:
+    #     h_base = create_h_base(NUM_OF_FRAME + 1)
+    #     np.savez('h_base_data.npz', h_base=np.array(h_base, dtype=object))
     h_base = create_h_base(NUM_OF_FRAME + 1)
     h_base_t = h_base[0]
     average_r = compute_r(device_positions, h_base_t, allocation=allocate(action), frame=1)
@@ -681,8 +695,10 @@ if __name__ == "__main__":
     total_plr_per_device = np.sum(plr_sum_per_device, axis=0) #tổng của plr của tất cả frames cho từng thiết bị (10000 frames)
 
     #tính trung bình plr của từng thiết bị qua tất cả frames
+    avg_plr_of_devices_plot = []
     for i, total in enumerate(total_plr_per_device):
         avg_plr_of_devices = 0.0
+        avg_plr_of_devices_plot.append(total/NUM_OF_FRAME)
         print(f"Thiết bị {i + 1}: Avg packet loss rate = {total/NUM_OF_FRAME}")
         avg_plr_of_devices += PLR_MAX*NUM_OF_FRAME - total
     avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
@@ -699,9 +715,11 @@ if __name__ == "__main__":
     # 'number_of_send_packet': number_of_send_packet_plot,
     # 'Avg reward': total_reward/10000,
     # 'Avg success': total_received/total_send,
+    # 'avg_plr_of_devices': avg_plr_of_devices_plot,
+    # 'avg_plr_total_of_device (delta_p)': avg_plr_total_of_device,
     # }
 
-    # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_04')
+    # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_05')
 
     # Vẽ đồ thị reward
     plt.figure(figsize=(12, 6))
