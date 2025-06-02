@@ -601,6 +601,7 @@ if __name__ == "__main__":
     # else:
     #     h_base = create_h_base(NUM_OF_FRAME + 1)
     #     np.savez('h_base_data.npz', h_base=np.array(h_base, dtype=object))
+
     h_base = create_h_base(NUM_OF_FRAME + 1)
     h_base_t = h_base[0]
     average_r = compute_r(device_positions, h_base_t, allocation=allocate(action), frame=1)

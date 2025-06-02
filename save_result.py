@@ -45,3 +45,21 @@ def save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tu
             f.write(f'{key}: {value}\n')
 
     print(f"[INFO] Tunable parameters saved to {full_path}")
+
+
+#### HÀM LƯU GIÁ TRỊ H_BASE ####
+def save_or_load_h_base(I, NUM_DEVICES, num_frames, storage_dir='data/h_base_storage'):
+    # Tạo thư mục nếu chưa tồn tại
+    os.makedirs(storage_dir, exist_ok=True)
+
+    # Tạo tên file kèm thời gian
+    current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    filename = f"h_base_{I}Q_{NUM_DEVICES}D_{current_time}.npz"
+    full_path = os.path.join(storage_dir, filename)
+
+    # Nếu file đã có (tuỳ ý kiểm tra theo logic riêng, ví dụ: lấy file gần nhất nếu cần)
+    h_base = create_h_base(num_frames)
+    np.savez(full_path, h_base=np.array(h_base, dtype=object))
+
+    print(f"[INFO] h_base saved to {full_path}")
+    return h_base
