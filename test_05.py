@@ -338,16 +338,17 @@ class QNetworkManager:
         best_action_idx = torch.argmax(risk_averse_q).item()
         return index_to_action(best_action_idx)
     
-    def update_q_network(self, network_idx, state, action, reward, next_state):
+    def update_q_network(self,buffer_idx, network_idx, state, action, reward, next_state):
         """Cập nhật Q-network với target network"""
-        # 1. Cập nhật V và alpha
-        self.update_v_alpha(network_idx, state, action)
         
         # 2. Thêm trải nghiệm vào buffer
-        self.replay_buffers[network_idx].add(state, action, reward, next_state)
+        self.replay_buffers[buffer_idx].add(state, action, reward, next_state)
         
         # 3. Nếu buffer đủ lớn, tiến hành học từ mini-batch
-        if len(self.replay_buffers[network_idx]) >= MIN_REPLAY_SIZE:
+        if len(self.replay_buffers[buffer_idx]) >= MIN_REPLAY_SIZE:
+            # 1. Cập nhật V và alpha
+            self.update_v_alpha(network_idx, state, action)
+            
             self.learn_from_replay_buffer(network_idx)
             
         # 4. Cập nhật target networks định kỳ
@@ -629,6 +630,7 @@ if __name__ == "__main__":
         
         # Chọn ngẫu nhiên một Q-network (tương ứng với H trong mã gốc)
         H = np.random.randint(0, I)
+        # H = 2
         
         # Chọn action sử dụng Q risk-averse
         action = q_manager.choose_action(state, EPSILON, H)
@@ -672,7 +674,7 @@ if __name__ == "__main__":
         # Cập nhật các Q-networks
         for i in range(I):
             if J[i] == 1:
-                q_manager.update_q_network(i, state, action, reward_value, next_state)
+                q_manager.update_q_network(H, i, state, action, reward_value, next_state)
         
         # Chuyển sang trạng thái mới
         state = next_state
