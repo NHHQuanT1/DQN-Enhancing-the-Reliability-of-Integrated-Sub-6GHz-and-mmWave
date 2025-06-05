@@ -1,6 +1,8 @@
 from datetime import datetime
 import pickle
 import os
+import test_05 as core
+import numpy as np
 
 # save_dir = "results"   #Tạo folder trước
 
@@ -54,12 +56,21 @@ def save_or_load_h_base(I, NUM_DEVICES, num_frames, storage_dir='data/h_base_sto
 
     # Tạo tên file kèm thời gian
     current_time = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    filename = f"h_base_{I}Q_{NUM_DEVICES}D_{current_time}.npz"
+    key_word = 'test_05'
+    filename = f"h_base_{I}Q_{NUM_DEVICES}D_{key_word}.npz"
     full_path = os.path.join(storage_dir, filename)
 
-    # Nếu file đã có (tuỳ ý kiểm tra theo logic riêng, ví dụ: lấy file gần nhất nếu cần)
-    h_base = create_h_base(num_frames)
-    np.savez(full_path, h_base=np.array(h_base, dtype=object))
+    # Kiểm tra xem file đã tồn tại chưa
+    if os.path.exists(full_path):
+        # Tải h_base từ file
+        with np.load(full_path, allow_pickle=True) as data:
+            h_base = data['h_base'].tolist()
+        print(f"[INFO] Đã tải h_base từ {full_path}")
+    else:
+        # Tạo mới h_base
+        h_base = core.create_h_base(num_frames)
+        # Lưu h_base vào file
+        np.savez(full_path, h_base=np.array(h_base, dtype=object))
+        print(f"[INFO] Đã tạo và lưu h_base vào {full_path}")
 
-    print(f"[INFO] h_base saved to {full_path}")
     return h_base

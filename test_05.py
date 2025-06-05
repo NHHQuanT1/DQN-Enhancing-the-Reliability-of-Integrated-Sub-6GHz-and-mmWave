@@ -32,7 +32,7 @@ X0 = 1
 
 # Tham số mới cho Replay Buffer
 REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
-BATCH_SIZE = 64               # Kích thước batch để học
+BATCH_SIZE = 128               # Kích thước batch để học
 MIN_REPLAY_SIZE = 500        # Kích thước tối thiểu để bắt đầu học
 
 # ===== Định nghĩa lớp ReplayBuffer =====
@@ -117,41 +117,131 @@ def index_to_action(index):
     return action
 
 # ===== Định nghĩa kiến trúc mạng neural network được cải thiện =====
+# class QNetwork(nn.Module):
+#     def __init__(self, dropout_rate=0.2):
+#         super(QNetwork, self).__init__()
+#         self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
+#         self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
+        
+#         # Xây dựng mạng neural với Batch Normalization tốt hơn
+#         self.fc1 = nn.Linear(self.state_dim, 128)
+#         self.bn1 = nn.BatchNorm1d(128)  
+#         # self.dropout1 = nn.Dropout(dropout_rate)
+        
+#         self.fc2 = nn.Linear(128, 128)  # Tăng kích thước layer thứ 2
+#         self.bn2 = nn.BatchNorm1d(128)
+#         # self.dropout2 = nn.Dropout(dropout_rate)
+        
+#         self.fc3 = nn.Linear(128, 64)
+#         self.bn3 = nn.BatchNorm1d(64)
+#         # self.dropout3 = nn.Dropout(dropout_rate)
+        
+#         # Đầu ra không cần BatchNorm và Dropout
+#         self.fc4 = nn.Linear(64, self.action_size)
+        
+#         # Khởi tạo trọng số
+#         self.initialize_weights()
+        
+#     # def _initialize_weights(self):
+#     #     """Khởi tạo trọng số theo phương pháp Xavier/He"""
+#     #     for m in self.modules():
+#     #         if isinstance(m, nn.Linear):
+#     #             nn.init.xavier_uniform_(m.weight)
+#     #             if m.bias is not None:
+#     #                 nn.init.constant_(m.bias, 0)
+#     #         elif isinstance(m, nn.BatchNorm1d):
+#     #             nn.init.constant_(m.weight, 1)
+#     #             nn.init.constant_(m.bias, 0)
+#     def initialize_weights(self):
+#         """Khởi tạo trọng số theo He (Kaiming) Initialization"""
+#         for m in self.modules():
+#             if isinstance(m, nn.Linear):
+#                 nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
+#                 if m.bias is not None:
+#                     nn.init.constant_(m.bias, 0)
+#             elif isinstance(m, nn.BatchNorm1d):
+#                 nn.init.constant_(m.weight, 1)
+#                 nn.init.constant_(m.bias, 0)
+        
+#     def forward(self, state):
+#         """
+#         Nhận đầu vào là state, trả về Q-values cho tất cả action khả thi
+#         """
+#         # Chuyển state thành tensor và làm phẳng
+#         if not isinstance(state, torch.Tensor):
+#             state = torch.FloatTensor(state.flatten())
+#             if len(state.shape) == 1:
+#                 state = state.unsqueeze(0)  # Thêm batch dimension
+#         elif len(state.shape) == 1:
+#             state = state.unsqueeze(0)
+        
+#         # Đảm bảo state có đúng kích thước
+#         if state.shape[-1] != self.state_dim:
+#             state = state.view(-1, self.state_dim)
+        
+#         # Forward pass với BatchNorm
+#         x = self.fc1(state)
+        
+#         # Chỉ áp dụng BatchNorm khi batch_size > 1
+#         if x.shape[0] > 1:
+#             x = self.bn1(x)
+#         x = F.relu(x)
+#         # x = self.dropout1(x)
+        
+#         x = self.fc2(x)
+#         if x.shape[0] > 1:
+#             x = self.bn2(x)
+#         x = F.relu(x)
+#         # x = self.dropout2(x)
+        
+#         x = self.fc3(x)
+#         if x.shape[0] > 1:
+#             x = self.bn3(x)
+#         x = F.relu(x)
+#         # x = self.dropout3(x)
+        
+#         # Layer cuối không có activation
+#         x = self.fc4(x)
+#         return x
+    
+#     def get_q_value(self, state, action):
+#         """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
+#         self.eval()  # Chuyển sang eval mode
+#         with torch.no_grad():
+#             q_values = self(state)
+#             action_idx = action_to_index(action)
+#             return q_values[0, action_idx].item()
+
 class QNetwork(nn.Module):
     def __init__(self, dropout_rate=0.2):
         super(QNetwork, self).__init__()
         self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
         self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
         
-        # Xây dựng mạng neural với Batch Normalization tốt hơn
-        self.fc1 = nn.Linear(self.state_dim, 128)
-        self.bn1 = nn.BatchNorm1d(128)  
+        # Xây dựng mạng neural với thêm một hidden layer
+        self.fc1 = nn.Linear(self.state_dim, 256)
+        self.bn1 = nn.BatchNorm1d(256)  
         # self.dropout1 = nn.Dropout(dropout_rate)
         
-        self.fc2 = nn.Linear(128, 128)  # Tăng kích thước layer thứ 2
+        self.fc2 = nn.Linear(256, 128)  # Hidden layer 1
         self.bn2 = nn.BatchNorm1d(128)
         # self.dropout2 = nn.Dropout(dropout_rate)
         
-        self.fc3 = nn.Linear(128, 64)
-        self.bn3 = nn.BatchNorm1d(64)
+        # *** THÊM HIDDEN LAYER MỚI ***
+        self.fc3 = nn.Linear(128, 96)   # Hidden layer 2 (mới thêm)
+        self.bn3 = nn.BatchNorm1d(96)
         # self.dropout3 = nn.Dropout(dropout_rate)
         
+        self.fc4 = nn.Linear(96, 64)    # Hidden layer 3 (đã điều chỉnh input size)
+        self.bn4 = nn.BatchNorm1d(64)
+        # self.dropout4 = nn.Dropout(dropout_rate)
+        
         # Đầu ra không cần BatchNorm và Dropout
-        self.fc4 = nn.Linear(64, self.action_size)
+        self.fc5 = nn.Linear(64, self.action_size)  # Output layer (đổi từ fc4 thành fc5)
         
         # Khởi tạo trọng số
         self.initialize_weights()
         
-    # def _initialize_weights(self):
-    #     """Khởi tạo trọng số theo phương pháp Xavier/He"""
-    #     for m in self.modules():
-    #         if isinstance(m, nn.Linear):
-    #             nn.init.xavier_uniform_(m.weight)
-    #             if m.bias is not None:
-    #                 nn.init.constant_(m.bias, 0)
-    #         elif isinstance(m, nn.BatchNorm1d):
-    #             nn.init.constant_(m.weight, 1)
-    #             nn.init.constant_(m.bias, 0)
     def initialize_weights(self):
         """Khởi tạo trọng số theo He (Kaiming) Initialization"""
         for m in self.modules():
@@ -179,29 +269,36 @@ class QNetwork(nn.Module):
         if state.shape[-1] != self.state_dim:
             state = state.view(-1, self.state_dim)
         
-        # Forward pass với BatchNorm
+        # Forward pass với BatchNorm - Layer 1
         x = self.fc1(state)
-        
-        # Chỉ áp dụng BatchNorm khi batch_size > 1
         if x.shape[0] > 1:
             x = self.bn1(x)
         x = F.relu(x)
         # x = self.dropout1(x)
         
+        # Forward pass - Layer 2
         x = self.fc2(x)
         if x.shape[0] > 1:
             x = self.bn2(x)
         x = F.relu(x)
         # x = self.dropout2(x)
         
+        # *** FORWARD PASS - LAYER 3 MỚI ***
         x = self.fc3(x)
         if x.shape[0] > 1:
             x = self.bn3(x)
         x = F.relu(x)
         # x = self.dropout3(x)
         
-        # Layer cuối không có activation
+        # Forward pass - Layer 4
         x = self.fc4(x)
+        if x.shape[0] > 1:
+            x = self.bn4(x)
+        x = F.relu(x)
+        # x = self.dropout4(x)
+        
+        # Output layer (không có activation)
+        x = self.fc5(x)
         return x
     
     def get_q_value(self, state, action):
@@ -211,7 +308,6 @@ class QNetwork(nn.Module):
             q_values = self(state)
             action_idx = action_to_index(action)
             return q_values[0, action_idx].item()
-
 
 # ===== Hàm xử lý bảng V và alpha =====
 def initialize_V():
@@ -246,7 +342,7 @@ class QNetworkManager:
         self.schedulers = []  # Thêm learning rate scheduler
         
         for _ in range(I):
-            # network = QNetwork(dropout_rate=0.01)
+            # network = QNetwork(dropout_rate=0.1)
             network = QNetwork()
             optimizer = optim.Adam(network.parameters(), lr=learning_rate, weight_decay=1e-5)  # Thêm weight decay
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.95)  # LR decay, học sau 500 step và giảm 5%
@@ -268,7 +364,7 @@ class QNetworkManager:
         self.update_counter = 0
         
         for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng
-            # target_net = QNetwork(dropout_rate=0.01)
+            # target_net = QNetwork(dropout_rate=0.1)
             target_net = QNetwork()
             target_net.load_state_dict(self.q_networks[_].state_dict())
             target_net.eval()  # Target network luôn ở eval mode
@@ -458,10 +554,11 @@ def create_h_base(num_of_frame, mean = 0, sigma = 1):
     return h_base
 
 def compute_r(device_positions, h_base, allocation, frame):
+    h_base_sub = np.array(h_base[0])
     r = []
     r_sub = np.zeros(NUM_DEVICES)
     r_mW = np.zeros(NUM_DEVICES)
-    h_base_sub = h_base[0]
+    # h_base_sub = h_base[0] #sửa lỗi để fix train trên 1 bộ dữ liệu h_base
 
     for k in range(NUM_DEVICES):
         sub_channel_index = allocation[0][k]
@@ -593,17 +690,9 @@ if __name__ == "__main__":
     reward_value = 0.0
     allocation = allocate(action)
     packet_loss_rate = np.zeros(shape=(NUM_DEVICES, 2))
-    
-    # Tạo h_base cho mỗi frame
-    # Kiểm tra và đọc/tạo h_base
-    # if os.path.exists('h_base_data.npz'):
-    #     with np.load('h_base_data.npz', allow_pickle=True) as data:
-    #         h_base = data['h_base'].tolist()
-    # else:
-    #     h_base = create_h_base(NUM_OF_FRAME + 1)
-    #     np.savez('h_base_data.npz', h_base=np.array(h_base, dtype=object))
 
-    h_base = create_h_base(NUM_OF_FRAME + 1)
+    # h_base = create_h_base(NUM_OF_FRAME + 1)
+    h_base = save.save_or_load_h_base(I,NUM_DEVICES, NUM_OF_FRAME+1)
     h_base_t = h_base[0]
     average_r = compute_r(device_positions, h_base_t, allocation=allocate(action), frame=1)
     
@@ -620,7 +709,11 @@ if __name__ == "__main__":
     for frame in range(1, NUM_OF_FRAME + 1):
         # Cập nhật epsilon
         # EPSILON = EPSILON * LAMBDA
-        EPSILON = max(EPS_END, EPSILON * LAMBDA)
+        if frame <= 1000:
+            EPSILON = 1  # Giữ nguyên = 0.5
+        else:
+            EPSILON = max(EPS_END, EPSILON * LAMBDA)
+        # EPSILON = max(EPS_END, EPSILON * LAMBDA)
         # if frame > 1000:
         #     EPSILON = max(EPS_END, EPSILON * LAMBDA)
         # else: 
@@ -707,6 +800,7 @@ if __name__ == "__main__":
     avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
 
     print("Avg plr_total_of_device:", avg_plr_total_of_device)
+    
     # tunable_parameters = {
     # 'h_base_sub6': h_base_t,
     # 'state': state_plot,
