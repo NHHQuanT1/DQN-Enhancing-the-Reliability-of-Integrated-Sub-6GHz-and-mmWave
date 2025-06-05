@@ -130,7 +130,7 @@ def transmit_beam_gain(eta = 5*np.pi/180, beta = 0):
 #h for mmWave each device within frame_t
 def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0): #truyền vào vị trí các device, device k, frame
     #device blocked
-    if(device_index == 1 or device_index == 5 or device_index == 12):
+    if(device_index == 1 or device_index == 5 or device_index == 11):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame) # giá trị PL tại frame_num của beam device k
         h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/10.0) * 0.1 # G_Rx^k=epsilon
     

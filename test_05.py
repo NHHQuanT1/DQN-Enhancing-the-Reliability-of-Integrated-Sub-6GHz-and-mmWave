@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import random
 from collections import defaultdict, deque
 import os
+from datetime import datetime
 
 # Hyperparameters
 NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
@@ -32,7 +33,7 @@ X0 = 1
 
 # Tham số mới cho Replay Buffer
 REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
-BATCH_SIZE = 128               # Kích thước batch để học
+BATCH_SIZE = 16               # Kích thước batch để học
 MIN_REPLAY_SIZE = 500        # Kích thước tối thiểu để bắt đầu học
 
 # ===== Định nghĩa lớp ReplayBuffer =====
@@ -819,67 +820,136 @@ if __name__ == "__main__":
     # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_05')
 
     # Vẽ đồ thị reward
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    # # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
+    # plt.xlabel('Frame')
+    # plt.ylabel('Reward')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
+    
+    # # Vẽ đồ thị PLR
+    # packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+    # frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+    # plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+
+    
+    # plt.figure(figsize=(12, 6))
+    # for device_idx in range(NUM_DEVICES):
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+    #     plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    
+    # # Thêm đường chuẩn y = 0.1
+    # plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+
+    # # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
+    # plt.xlabel('Frame')
+    # plt.ylabel('PLR')
+    # plt.grid(True)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
+
+    # # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+    # action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+    # num_frames, num_devices = action_array.shape
+    # # Chuẩn bị mảng lưu phần trăm
+    # # shape: (3 hành động, num_devices)
+    # percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
+
+    # # Tính phần trăm cho từng hành động theo từng thiết bị
+    # for action in [0, 1, 2]:
+    #     # Đếm số lần action xuất hiện ở từng cột (thiết bị)
+    #     counts = np.sum(action_array == action, axis=0)
+    #     percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
+
+    # labels = [f'Device {i+1}' for i in range(num_devices)]
+    # x = np.arange(num_devices)  # Vị trí cột
+    # width = 0.25  # Độ rộng của mỗi nhóm cột
+
+    # plt.figure(figsize=(10, 6))
+    # plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+    # plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+    # plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+
+    # plt.ylabel('Ratio (%)')
+    # # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
+    # plt.xticks(x, labels)
+    # plt.ylim(0, 100)
+    # plt.legend()
+    # plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    # plt.tight_layout()
+    # plt.show()
+    
+    # ===== Tạo thư mục lưu ảnh theo thời gian =====
+    keyword = "scenario_{}Q_{}D".format(I, NUM_DEVICES)
+
+    # Lấy timestamp + ghép keyword
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{timestamp}_{keyword}"
+    save_dir = os.path.join("out_img", folder_name)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # ===== 1. Đồ thị Reward theo Frame =====
     plt.figure(figsize=(12, 6))
     plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-    plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
     plt.xlabel('Frame')
     plt.ylabel('Reward')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.show()
-    
-    # Vẽ đồ thị PLR
+    reward_path = os.path.join(save_dir, "reward_plot.png")
+    plt.savefig(reward_path)
+    plt.clf()
+    print(f"✅ Đã lưu: {reward_path}")
+
+    # ===== 2. Đồ thị PLR theo thiết bị =====
     packet_loss_rate_plot = np.array(packet_loss_rate_plot)
     frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
     plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
 
-    
     plt.figure(figsize=(12, 6))
     for device_idx in range(NUM_DEVICES):
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
         plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
-    
-    # Thêm đường chuẩn y = 0.1
     plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
-
-    plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
     plt.xlabel('Frame')
     plt.ylabel('PLR')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.show()
+    plr_path = os.path.join(save_dir, "plr_plot.png")
+    plt.savefig(plr_path)
+    plt.clf()
+    print(f"✅ Đã lưu: {plr_path}")
 
-    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
-    # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
-    action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+    # ===== 3. Biểu đồ tỉ lệ sử dụng action =====
+    action_array = np.array(action_plot)
     num_frames, num_devices = action_array.shape
-    # Chuẩn bị mảng lưu phần trăm
-    # shape: (3 hành động, num_devices)
-    percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
+    percentages = np.zeros((3, num_devices))  # actions: 0, 1, 2
 
-    # Tính phần trăm cho từng hành động theo từng thiết bị
     for action in [0, 1, 2]:
-        # Đếm số lần action xuất hiện ở từng cột (thiết bị)
         counts = np.sum(action_array == action, axis=0)
-        percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
+        percentages[action] = counts / num_frames * 100
 
     labels = [f'Device {i+1}' for i in range(num_devices)]
-    x = np.arange(num_devices)  # Vị trí cột
-    width = 0.25  # Độ rộng của mỗi nhóm cột
+    x = np.arange(num_devices)
+    width = 0.25
 
     plt.figure(figsize=(10, 6))
     plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
     plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
     plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
-
     plt.ylabel('Ratio (%)')
-    plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
     plt.xticks(x, labels)
     plt.ylim(0, 100)
     plt.legend()
     plt.grid(True, axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.show()
+    action_path = os.path.join(save_dir, "action_usage.png")
+    plt.savefig(action_path)
+    plt.clf()
+    print(f"✅ Đã lưu: {action_path}")
