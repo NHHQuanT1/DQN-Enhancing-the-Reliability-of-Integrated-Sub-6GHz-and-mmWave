@@ -92,6 +92,45 @@ def initialize_pos_of_devices():
 
 list_of_devices = initialize_pos_of_devices()
 
+# def initialize_pos_of_devices(distribution="uniform"):
+#     list_of_devices = []
+
+#     for _ in range(NUM_DEVICES):
+#         if distribution == "uniform":
+#             x = random.uniform(-80, 80)
+#             y = random.uniform(-80, 80)
+
+#         elif distribution == "gaussian":
+#             x = np.random.normal(loc=0.0, scale=30.0)
+#             y = np.random.normal(loc=0.0, scale=30.0)
+#             # Giới hạn tọa độ trong [-80, 80]
+#             x = max(min(x, 80), -80)
+#             y = max(min(y, 80), -80)
+
+#         elif distribution == "poisson":
+#             # Dịch từ [0, ∞) về [-80, 80] bằng cách lấy mean=40 và trừ 80
+#             x = np.random.poisson(lam=40) - 80
+#             y = np.random.poisson(lam=40) - 80
+#             x = max(min(x, 80), -80)
+#             y = max(min(y, 80), -80)
+
+#         else:
+#             raise ValueError("Unsupported distribution type. Use 'uniform', 'gaussian', or 'poisson'.")
+
+#         list_of_devices.append((x, y))
+
+#     return list_of_devices
+
+# # Uniform
+# # list_of_devices = initialize_pos_of_devices(distribution="uniform")
+
+# # Gaussian
+# # list_of_devices = initialize_pos_of_devices(distribution="gaussian")
+
+# # Poisson
+# list_of_devices = initialize_pos_of_devices(distribution="poisson")
+
+
 #Caculator Path loss
 #Path loss Sub_6GHz
 def path_loss_sub(d):
@@ -130,7 +169,7 @@ def transmit_beam_gain(eta = 5*np.pi/180, beta = 0):
 #h for mmWave each device within frame_t
 def h_mW(list_of_devices, device_index, frame, eta = 5*np.pi/180, beta = 0): #truyền vào vị trí các device, device k, frame
     #device blocked
-    if(device_index == 1 or device_index == 5 or device_index == 11):
+    if(device_index == 1 or device_index == 5 or device_index == 12):
         path_loss = nlos_path_loss_mW(distance_to_AP(list_of_devices[device_index]), frame) # giá trị PL tại frame_num của beam device k
         h = transmit_beam_gain(eta, beta) * 1 * pow(10, -path_loss/10.0) * 0.1 # G_Rx^k=epsilon
     

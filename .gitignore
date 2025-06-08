@@ -3,5 +3,5 @@ venv/
 results/
 .vscode/
 __pycache__/
-./data/h_base_storage
+data/h_base_storage
 out_img/

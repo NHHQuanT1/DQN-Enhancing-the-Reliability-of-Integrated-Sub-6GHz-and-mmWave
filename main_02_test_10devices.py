@@ -3,9 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Hyperparameters
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -634,6 +634,58 @@ plt.grid(True, axis='y', linestyle='--', alpha=0.7)
 plt.tight_layout()
 plt.show()
 
+#vẽ biểu đồ plr cho từng thiết bị ứng với các giao diện mạng 
+packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+
+# Tổng PLR của mỗi thiết bị theo thời gian (tức là: cộng sub-6GHz + mmWave)
+plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+
+plt.figure(figsize=(12, 6))
+for device_idx in range(NUM_DEVICES):
+    # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+    # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
+    plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+
+plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame')
+plt.xlabel('Frame')
+plt.ylabel('PLR')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+#===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+# Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
+num_frames, num_devices = action_array.shape
+# Chuẩn bị mảng lưu phần trăm
+# shape: (3 hành động, num_devices)
+percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
+
+# Tính phần trăm cho từng hành động theo từng thiết bị
+for action in [0, 1, 2]:
+    # Đếm số lần action xuất hiện ở từng cột (thiết bị)
+    counts = np.sum(action_array == action, axis=0)
+    percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
+
+labels = [f'Device {i+1}' for i in range(num_devices)]
+x = np.arange(num_devices)  # Vị trí cột
+width = 0.25  # Độ rộng của mỗi nhóm cột
+
+plt.figure(figsize=(10, 6))
+plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+
+plt.ylabel('Ratio (%)')
+plt.title('Interface usage distribution per device, scenario 1')
+plt.xticks(x, labels)
+plt.ylim(0, 100)
+plt.legend()
+plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+plt.show()
 # import numpy as np
 # import os
 # from datetime import datetime
