@@ -61,7 +61,7 @@ def initialize_pos_of_devices():
             y = -20
 
         elif(i == 6):
-            x = -40
+            x = -45
             y = 15
 
         elif(i == 7):
@@ -70,7 +70,7 @@ def initialize_pos_of_devices():
 
         elif(i == 8):
             x = 50
-            y = 0
+            y = 2
 
         elif(i == 9):
             x = 50

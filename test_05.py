@@ -118,133 +118,92 @@ def index_to_action(index):
     return action
 
 # ===== Định nghĩa kiến trúc mạng neural network được cải thiện =====
-# class QNetwork(nn.Module):
-#     def __init__(self, dropout_rate=0.2):
-#         super(QNetwork, self).__init__()
-#         self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
-#         self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
-        
-#         # Xây dựng mạng neural với Batch Normalization tốt hơn
-#         self.fc1 = nn.Linear(self.state_dim, 128)
-#         self.bn1 = nn.BatchNorm1d(128)  
-#         # self.dropout1 = nn.Dropout(dropout_rate)
-        
-#         self.fc2 = nn.Linear(128, 128)  # Tăng kích thước layer thứ 2
-#         self.bn2 = nn.BatchNorm1d(128)
-#         # self.dropout2 = nn.Dropout(dropout_rate)
-        
-#         self.fc3 = nn.Linear(128, 64)
-#         self.bn3 = nn.BatchNorm1d(64)
-#         # self.dropout3 = nn.Dropout(dropout_rate)
-        
-#         # Đầu ra không cần BatchNorm và Dropout
-#         self.fc4 = nn.Linear(64, self.action_size)
-        
-#         # Khởi tạo trọng số
-#         self.initialize_weights()
-        
-#     # def _initialize_weights(self):
-#     #     """Khởi tạo trọng số theo phương pháp Xavier/He"""
-#     #     for m in self.modules():
-#     #         if isinstance(m, nn.Linear):
-#     #             nn.init.xavier_uniform_(m.weight)
-#     #             if m.bias is not None:
-#     #                 nn.init.constant_(m.bias, 0)
-#     #         elif isinstance(m, nn.BatchNorm1d):
-#     #             nn.init.constant_(m.weight, 1)
-#     #             nn.init.constant_(m.bias, 0)
-#     def initialize_weights(self):
-#         """Khởi tạo trọng số theo He (Kaiming) Initialization"""
-#         for m in self.modules():
-#             if isinstance(m, nn.Linear):
-#                 nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
-#                 if m.bias is not None:
-#                     nn.init.constant_(m.bias, 0)
-#             elif isinstance(m, nn.BatchNorm1d):
-#                 nn.init.constant_(m.weight, 1)
-#                 nn.init.constant_(m.bias, 0)
-        
-#     def forward(self, state):
-#         """
-#         Nhận đầu vào là state, trả về Q-values cho tất cả action khả thi
-#         """
-#         # Chuyển state thành tensor và làm phẳng
-#         if not isinstance(state, torch.Tensor):
-#             state = torch.FloatTensor(state.flatten())
-#             if len(state.shape) == 1:
-#                 state = state.unsqueeze(0)  # Thêm batch dimension
-#         elif len(state.shape) == 1:
-#             state = state.unsqueeze(0)
-        
-#         # Đảm bảo state có đúng kích thước
-#         if state.shape[-1] != self.state_dim:
-#             state = state.view(-1, self.state_dim)
-        
-#         # Forward pass với BatchNorm
-#         x = self.fc1(state)
-        
-#         # Chỉ áp dụng BatchNorm khi batch_size > 1
-#         if x.shape[0] > 1:
-#             x = self.bn1(x)
-#         x = F.relu(x)
-#         # x = self.dropout1(x)
-        
-#         x = self.fc2(x)
-#         if x.shape[0] > 1:
-#             x = self.bn2(x)
-#         x = F.relu(x)
-#         # x = self.dropout2(x)
-        
-#         x = self.fc3(x)
-#         if x.shape[0] > 1:
-#             x = self.bn3(x)
-#         x = F.relu(x)
-#         # x = self.dropout3(x)
-        
-#         # Layer cuối không có activation
-#         x = self.fc4(x)
-#         return x
-    
-#     def get_q_value(self, state, action):
-#         """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
-#         self.eval()  # Chuyển sang eval mode
-#         with torch.no_grad():
-#             q_values = self(state)
-#             action_idx = action_to_index(action)
-#             return q_values[0, action_idx].item()
-
 class QNetwork(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout_rate=0.2):
         super(QNetwork, self).__init__()
-        self.state_dim = NUM_DEVICES * 4
-        self.action_size = 3 ** NUM_DEVICES
-
+        self.state_dim = NUM_DEVICES * 4  # Mỗi thiết bị có 4 đặc trưng
+        self.action_size = 3**NUM_DEVICES  # Tổng số action (3 actions cho mỗi thiết bị)
+        
+        # Xây dựng mạng neural với Batch Normalization tốt hơn
         self.fc1 = nn.Linear(self.state_dim, 128)
-        self.ln1 = nn.LayerNorm(128)
-        self.fc2 = nn.Linear(128, 64)
-        self.ln2 = nn.LayerNorm(64)
-        self.fc3 = nn.Linear(64, self.action_size)
-
+        self.bn1 = nn.BatchNorm1d(128)  
+        # self.dropout1 = nn.Dropout(dropout_rate)
+        
+        self.fc2 = nn.Linear(128, 128)  # layer thứ 2
+        self.bn2 = nn.BatchNorm1d(128)
+        # self.dropout2 = nn.Dropout(dropout_rate)
+        
+        self.fc3 = nn.Linear(128, 64)
+        self.bn3 = nn.BatchNorm1d(64)
+        # self.dropout3 = nn.Dropout(dropout_rate)
+        
+        self.fc4 = nn.Linear(64, self.action_size)
+        
+        # Khởi tạo trọng số
         self.initialize_weights()
         
+    # def _initialize_weights(self):
+    #     """Khởi tạo trọng số theo phương pháp Xavier/He"""
+    #     for m in self.modules():
+    #         if isinstance(m, nn.Linear):
+    #             nn.init.xavier_uniform_(m.weight)
+    #             if m.bias is not None:
+    #                 nn.init.constant_(m.bias, 0)
+    #         elif isinstance(m, nn.BatchNorm1d):
+    #             nn.init.constant_(m.weight, 1)
+    #             nn.init.constant_(m.bias, 0)
     def initialize_weights(self):
+        """Khởi tạo trọng số theo He (Kaiming) Initialization"""
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-                
+        
     def forward(self, state):
+        """
+        Nhận đầu vào là state, trả về Q-values cho tất cả action khả thi
+        """
+        # Chuyển state thành tensor và làm phẳng
         if not isinstance(state, torch.Tensor):
             state = torch.FloatTensor(state.flatten())
             if len(state.shape) == 1:
-                state = state.unsqueeze(0)
+                state = state.unsqueeze(0)  # Thêm batch dimension
         elif len(state.shape) == 1:
             state = state.unsqueeze(0)
-        x = F.relu(self.ln1(self.fc1(state)))
-        x = F.relu(self.ln2(self.fc2(x)))
+        
+        # Đảm bảo state có đúng kích thước
+        if state.shape[-1] != self.state_dim:
+            state = state.view(-1, self.state_dim)
+        
+        # Forward pass với BatchNorm
+        x = self.fc1(state)
+        
+        # Chỉ áp dụng BatchNorm khi batch_size > 1
+        if x.shape[0] > 1:
+            x = self.bn1(x)
+        x = F.relu(x)
+        # x = self.dropout1(x)
+        
+        x = self.fc2(x)
+        if x.shape[0] > 1:
+            x = self.bn2(x)
+        x = F.relu(x)
+        # x = self.dropout2(x)
+        
         x = self.fc3(x)
+        if x.shape[0] > 1:
+            x = self.bn3(x)
+        x = F.relu(x)
+        # x = self.dropout3(x)
+        
+        # Layer cuối không có activation
+        x = self.fc4(x)
         return x
-
+    
     def get_q_value(self, state, action):
         """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
         self.eval()  # Chuyển sang eval mode
@@ -252,6 +211,46 @@ class QNetwork(nn.Module):
             q_values = self(state)
             action_idx = action_to_index(action)
             return q_values[0, action_idx].item()
+
+# class QNetwork(nn.Module):
+#     def __init__(self):
+#         super(QNetwork, self).__init__()
+#         self.state_dim = NUM_DEVICES * 4
+#         self.action_size = 3 ** NUM_DEVICES
+
+#         self.fc1 = nn.Linear(self.state_dim, 128)
+#         self.ln1 = nn.LayerNorm(128)
+#         self.fc2 = nn.Linear(128, 64)
+#         self.ln2 = nn.LayerNorm(64)
+#         self.fc3 = nn.Linear(64, self.action_size)
+
+#         self.initialize_weights()
+        
+#     def initialize_weights(self):
+#         for m in self.modules():
+#             if isinstance(m, nn.Linear):
+#                 nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
+#                 nn.init.constant_(m.bias, 0)
+                
+#     def forward(self, state):
+#         if not isinstance(state, torch.Tensor):
+#             state = torch.FloatTensor(state.flatten())
+#             if len(state.shape) == 1:
+#                 state = state.unsqueeze(0)
+#         elif len(state.shape) == 1:
+#             state = state.unsqueeze(0)
+#         x = F.relu(self.ln1(self.fc1(state)))
+#         x = F.relu(self.ln2(self.fc2(x)))
+#         x = self.fc3(x)
+#         return x
+
+#     def get_q_value(self, state, action):
+#         """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
+#         self.eval()  # Chuyển sang eval mode
+#         with torch.no_grad():
+#             q_values = self(state)
+#             action_idx = action_to_index(action)
+#             return q_values[0, action_idx].item()
 
 # ===== Hàm xử lý bảng V và alpha =====
 def initialize_V():
@@ -304,7 +303,7 @@ class QNetworkManager:
         
         # Thêm target networks cho stable training
         self.target_networks = []
-        self.target_update_freq = 100  # Cập nhật target network mỗi 100 steps
+        self.target_update_freq = 200  # Cập nhật target network mỗi N steps
         self.update_counter = 0
         
         for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng
@@ -763,138 +762,138 @@ if __name__ == "__main__":
     save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_05')
     
     # ===== View test các trường hợp tunning
-    #Vẽ đồ thị reward
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-    # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
-    plt.xlabel('Frame')
-    plt.ylabel('Reward')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    
-    # Vẽ đồ thị PLR
-    packet_loss_rate_plot = np.array(packet_loss_rate_plot)
-    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
-    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
-
-    
-    plt.figure(figsize=(12, 6))
-    for device_idx in range(NUM_DEVICES):
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
-        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
-    
-    # Thêm đường chuẩn y = 0.1
-    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
-
-    # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
-    plt.xlabel('Frame')
-    plt.ylabel('PLR')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
-    # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
-    action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
-    num_frames, num_devices = action_array.shape
-    # Chuẩn bị mảng lưu phần trăm
-    # shape: (3 hành động, num_devices)
-    percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
-
-    # Tính phần trăm cho từng hành động theo từng thiết bị
-    for action in [0, 1, 2]:
-        # Đếm số lần action xuất hiện ở từng cột (thiết bị)
-        counts = np.sum(action_array == action, axis=0)
-        percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
-
-    labels = [f'Device {i+1}' for i in range(num_devices)]
-    x = np.arange(num_devices)  # Vị trí cột
-    width = 0.25  # Độ rộng của mỗi nhóm cột
-
-    plt.figure(figsize=(10, 6))
-    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
-    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
-    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
-
-    plt.ylabel('Ratio (%)')
-    # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
-    plt.xticks(x, labels)
-    plt.ylim(0, 100)
-    plt.legend()
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.show()
-    
-    
-    # ===== Tạo thư mục lưu ảnh theo thời gian =====
-    # keyword = "scenario_{}Q_{}D".format(I, NUM_DEVICES)
-
-    # # Lấy timestamp + ghép keyword
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # folder_name = f"{timestamp}_{keyword}"
-    # save_dir = os.path.join("out_img", folder_name)
-    # os.makedirs(save_dir, exist_ok=True)
-
-    # # ===== 1. Đồ thị Reward theo Frame =====
+    # #Vẽ đồ thị reward
     # plt.figure(figsize=(12, 6))
     # plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    # # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
     # plt.xlabel('Frame')
     # plt.ylabel('Reward')
     # plt.grid(True)
     # plt.legend()
     # plt.tight_layout()
-    # reward_path = os.path.join(save_dir, "reward_plot.png")
-    # plt.savefig(reward_path)
-    # plt.clf()
-    # print(f"✅ Đã lưu: {reward_path}")
-
-    # # ===== 2. Đồ thị PLR theo thiết bị =====
+    # plt.show()
+    
+    # # Vẽ đồ thị PLR
     # packet_loss_rate_plot = np.array(packet_loss_rate_plot)
     # frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
     # plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
 
+    
     # plt.figure(figsize=(12, 6))
     # for device_idx in range(NUM_DEVICES):
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
     #     plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    
+    # # Thêm đường chuẩn y = 0.1
     # plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+
+    # # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
     # plt.xlabel('Frame')
     # plt.ylabel('PLR')
     # plt.grid(True)
     # plt.legend()
     # plt.tight_layout()
-    # plr_path = os.path.join(save_dir, "plr_plot.png")
-    # plt.savefig(plr_path)
-    # plt.clf()
-    # print(f"✅ Đã lưu: {plr_path}")
+    # plt.show()
 
-    # # ===== 3. Biểu đồ tỉ lệ sử dụng action =====
-    # action_array = np.array(action_plot)
+    # # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+    # action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
     # num_frames, num_devices = action_array.shape
-    # percentages = np.zeros((3, num_devices))  # actions: 0, 1, 2
+    # # Chuẩn bị mảng lưu phần trăm
+    # # shape: (3 hành động, num_devices)
+    # percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
 
+    # # Tính phần trăm cho từng hành động theo từng thiết bị
     # for action in [0, 1, 2]:
+    #     # Đếm số lần action xuất hiện ở từng cột (thiết bị)
     #     counts = np.sum(action_array == action, axis=0)
-    #     percentages[action] = counts / num_frames * 100
+    #     percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
 
     # labels = [f'Device {i+1}' for i in range(num_devices)]
-    # x = np.arange(num_devices)
-    # width = 0.25
+    # x = np.arange(num_devices)  # Vị trí cột
+    # width = 0.25  # Độ rộng của mỗi nhóm cột
 
     # plt.figure(figsize=(10, 6))
     # plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
     # plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
     # plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+
     # plt.ylabel('Ratio (%)')
+    # # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
     # plt.xticks(x, labels)
     # plt.ylim(0, 100)
     # plt.legend()
     # plt.grid(True, axis='y', linestyle='--', alpha=0.7)
     # plt.tight_layout()
-    # action_path = os.path.join(save_dir, "action_usage.png")
-    # plt.savefig(action_path)
-    # plt.clf()
-    # print(f"✅ Đã lưu: {action_path}")
+    # plt.show()
+    
+    
+    # ===== Tạo thư mục lưu ảnh theo thời gian =====
+    keyword = "scenario_{}Q_{}D".format(I, NUM_DEVICES)
+
+    # Lấy timestamp + ghép keyword
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{timestamp}_{keyword}"
+    save_dir = os.path.join("out_img", folder_name)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # ===== 1. Đồ thị Reward theo Frame =====
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    plt.xlabel('Frame')
+    plt.ylabel('Reward')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    reward_path = os.path.join(save_dir, "reward_plot.png")
+    plt.savefig(reward_path, dpi=300)
+    plt.clf()
+    print(f"✅ Đã lưu: {reward_path}")
+
+    # ===== 2. Đồ thị PLR theo thiết bị =====
+    packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+
+    plt.figure(figsize=(12, 6))
+    for device_idx in range(NUM_DEVICES):
+        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+    plt.xlabel('Frame')
+    plt.ylabel('PLR')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plr_path = os.path.join(save_dir, "plr_plot.png")
+    plt.savefig(plr_path, dpi=300)
+    plt.clf()
+    print(f"✅ Đã lưu: {plr_path}")
+
+    # ===== 3. Biểu đồ tỉ lệ sử dụng action =====
+    action_array = np.array(action_plot)
+    num_frames, num_devices = action_array.shape
+    percentages = np.zeros((3, num_devices))  # actions: 0, 1, 2
+
+    for action in [0, 1, 2]:
+        counts = np.sum(action_array == action, axis=0)
+        percentages[action] = counts / num_frames * 100
+
+    labels = [f'Device {i+1}' for i in range(num_devices)]
+    x = np.arange(num_devices)
+    width = 0.25
+
+    plt.figure(figsize=(10, 6))
+    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+    plt.ylabel('Ratio (%)')
+    plt.xticks(x, labels)
+    plt.ylim(0, 100)
+    plt.legend()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    action_path = os.path.join(save_dir, "action_usage.png")
+    plt.savefig(action_path, dpi=300)
+    plt.clf()
+    print(f"✅ Đã lưu: {action_path}")
