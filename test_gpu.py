@@ -32,54 +32,64 @@ LAMBDA = 0.995
 X0 = 1
 
 # Tham số mới cho Replay Buffer
-REPLAY_BUFFER_SIZE = 10000     # Kích thước buffer
+REPLAY_BUFFER_SIZE = 100000     # Kích thước buffer
 BATCH_SIZE = 64               # Kích thước batch để học
 MIN_REPLAY_SIZE = 500        # Kích thước tối thiểu để bắt đầu học
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("Using device:", device)
 # ===== Định nghĩa lớp ReplayBuffer =====
-import numpy as np
-
-class PrioritizedReplayBuffer:
-    def __init__(self, buffer_size, alpha=0.6):
-        self.buffer = []
-        self.max_size = buffer_size
-        self.alpha = alpha
-        self.pos = 0
-        self.priorities = np.zeros((buffer_size,), dtype=np.float32)
-
-    def add(self, state, action, reward, next_state, td_error=None):
-        max_prio = self.priorities.max() if self.buffer else 1.0
-        data = (state, action, reward, next_state)
-        if len(self.buffer) < self.max_size:
-            self.buffer.append(data)
-        else:
-            self.buffer[self.pos] = data
-        # Nếu chưa biết td_error thì set prio max (cho sample mới)
-        self.priorities[self.pos] = max_prio if td_error is None else (abs(td_error) + 1e-5)
-        self.pos = (self.pos + 1) % self.max_size
-
-    def sample(self, batch_size, beta=0.4):
-        if len(self.buffer) == self.max_size:
-            prios = self.priorities
-        else:
-            prios = self.priorities[:self.pos]
-        probs = prios ** self.alpha
-        probs /= probs.sum()
-        indices = np.random.choice(len(self.buffer), batch_size, p=probs)
-        samples = [self.buffer[idx] for idx in indices]
-        total = len(self.buffer)
-        weights = (total * probs[indices]) ** (-beta)
-        weights /= weights.max()
-        batch = list(zip(*samples))
-        return (np.array(batch[0]), np.array(batch[1]), np.array(batch[2]), np.array(batch[3])), indices, weights
-
-    def update_priorities(self, indices, td_errors):
-        for idx, td_error in zip(indices, td_errors):
-            self.priorities[idx] = abs(td_error) + 1e-5
-
+class ReplayBuffer:
+    def __init__(self, buffer_size):
+        """Khởi tạo buffer với kích thước cho trước"""
+        self.buffer = deque(maxlen=buffer_size)
+    
+    def add(self, state, action, reward, next_state):
+        """
+        Thêm một mẫu trải nghiệm vào buffer
+        state: trạng thái hiện tại
+        action: hành động được thực hiện
+        reward: phần thưởng nhận được
+        next_state: trạng thái tiếp theo
+        """
+        experience = (state, action, reward, next_state)
+        self.buffer.append(experience)
+    
+    def sample(self, batch_size):
+        """
+        Lấy mẫu ngẫu nhiên một batch từ buffer
+        Trả về tuple (states, actions, rewards, next_states)
+        """
+        # Đảm bảo batch_size không lớn hơn kích thước hiện tại của buffer
+        batch_size = min(batch_size, len(self.buffer))
+        
+        # Lấy mẫu ngẫu nhiên các chỉ số
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False) # chọn ngẫu nhiên mà không có lặp lại
+        
+        # Lấy dữ liệu từ các chỉ số đã chọn
+        states = []
+        actions = []
+        rewards = []
+        next_states = []
+        
+        for idx in indices:
+            state, action, reward, next_state = self.buffer[idx]
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            next_states.append(next_state)
+        
+        # Chuyển sang numpy array để dễ xử lý
+        return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards),
+            np.array(next_states)
+        )
+    
     def __len__(self):
+        """Trả về kích thước hiện tại của buffer"""
         return len(self.buffer)
-
 
 # Chuyển state, action thành key
 def state_action_to_key(state, action):
@@ -129,6 +139,7 @@ class QNetwork(nn.Module):
         self.bn3 = nn.BatchNorm1d(64)
         # self.dropout3 = nn.Dropout(dropout_rate)
         
+        # Đầu ra không cần BatchNorm và Dropout
         self.fc4 = nn.Linear(64, self.action_size)
         
         # Khởi tạo trọng số
@@ -204,46 +215,6 @@ class QNetwork(nn.Module):
             action_idx = action_to_index(action)
             return q_values[0, action_idx].item()
 
-# class QNetwork(nn.Module):
-    def __init__(self):
-        super(QNetwork, self).__init__()
-        self.state_dim = NUM_DEVICES * 4
-        self.action_size = 3 ** NUM_DEVICES
-
-        self.fc1 = nn.Linear(self.state_dim, 128)
-        self.ln1 = nn.LayerNorm(128)
-        self.fc2 = nn.Linear(128, 64)
-        self.ln2 = nn.LayerNorm(64)
-        self.fc3 = nn.Linear(64, self.action_size)
-
-        self.initialize_weights()
-        
-    def initialize_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
-                nn.init.constant_(m.bias, 0)
-                
-    def forward(self, state):
-        if not isinstance(state, torch.Tensor):
-            state = torch.FloatTensor(state.flatten())
-            if len(state.shape) == 1:
-                state = state.unsqueeze(0)
-        elif len(state.shape) == 1:
-            state = state.unsqueeze(0)
-        x = F.relu(self.ln1(self.fc1(state)))
-        x = F.relu(self.ln2(self.fc2(x)))
-        x = self.fc3(x)
-        return x
-
-    def get_q_value(self, state, action):
-        """Lấy Q-value cho một action cụ thể sử dụng cho đánh giá, kiểm tra"""
-        self.eval()  # Chuyển sang eval mode
-        with torch.no_grad():
-            q_values = self(state)
-            action_idx = action_to_index(action)
-            return q_values[0, action_idx].item()
-
 # ===== Hàm xử lý bảng V và alpha =====
 def initialize_V():
     """Khởi tạo I bảng V cho các cặp (state, action)"""
@@ -272,13 +243,15 @@ def update_alpha(alpha, V, state, action):
 class QNetworkManager:
     def __init__(self, learning_rate=0.001):  # Giảm learning rate
         # Khởi tạo I mạng neural network
-        self.q_networks = []
+        # self.q_networks = []
         self.optimizers = []
+        self.q_networks = [QNetwork().to(device) for _ in range(I)]
+        self.target_networks = [QNetwork().to(device) for _ in range(I)]
         self.schedulers = []  # Thêm learning rate scheduler
         
         for _ in range(I):
             # network = QNetwork(dropout_rate=0.1)
-            network = QNetwork()
+            network = QNetwork().to(device)
             optimizer = optim.Adam(network.parameters(), lr=learning_rate, weight_decay=1e-5)  # Thêm weight decay
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.95)  # LR decay, học sau 500 step và giảm 5%
             
@@ -290,18 +263,17 @@ class QNetworkManager:
         self.V = initialize_V()
         self.alpha = initialize_alpha()
         
-        # self.replay_buffers = [ReplayBuffer(REPLAY_BUFFER_SIZE) for _ in range(I)]
-        self.replay_buffers = [PrioritizedReplayBuffer(REPLAY_BUFFER_SIZE, alpha=0.6) for _ in range(I)]
-
+        # Khởi tạo Replay Buffer cho từng mạng
+        self.replay_buffers = [ReplayBuffer(REPLAY_BUFFER_SIZE) for _ in range(I)]
         
         # Thêm target networks cho stable training
         self.target_networks = []
-        self.target_update_freq = 100  # Cập nhật target network mỗi 100 steps
+        self.target_update_freq = 1000  # Cập nhật target network mỗi C steps
         self.update_counter = 0
         
         for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng
             # target_net = QNetwork(dropout_rate=0.1)
-            target_net = QNetwork()
+            target_net = QNetwork().to(device)
             target_net.load_state_dict(self.q_networks[_].state_dict())
             target_net.eval()  # Target network luôn ở eval mode
             self.target_networks.append(target_net)
@@ -327,7 +299,7 @@ class QNetworkManager:
         Q̂(s,a) = Q_H(s,a) - λ_p * sqrt(Var[Q(s,a)])
         """
         # Chuyển state thành tensor
-        state_tensor = torch.FloatTensor(state.flatten()).unsqueeze(0)
+        state_tensor = torch.FloatTensor(state.flatten()).unsqueeze(0).to(device)
         
         # Đặt tất cả mạng ở eval mode cho inference
         for net in self.q_networks:
@@ -335,17 +307,17 @@ class QNetworkManager:
         
         # Lấy Q-values từ mạng được chọn ngẫu nhiên H
         with torch.no_grad():
-            q_random = self.q_networks[random_idx](state_tensor)
+            q_random = self.q_networks[random_idx](state_tensor).to(device)
         
         # Tính Q-values trung bình từ tất cả mạng
-        q_avg = torch.zeros_like(q_random)
+        q_avg = torch.zeros_like(q_random).to(device)
         for i in range(I):
             with torch.no_grad():
                 q_avg += self.q_networks[i](state_tensor)
         q_avg /= I
         
         # Tính tổng bình phương độ lệch
-        sum_squared = torch.zeros_like(q_random)
+        sum_squared = torch.zeros_like(q_random).to(device)
         for i in range(I):
             with torch.no_grad():
                 diff = self.q_networks[i](state_tensor) - q_avg
@@ -354,9 +326,6 @@ class QNetworkManager:
         # Tính Q risk-averse
         risk_term = -LAMBDA_P * sum_squared / (I - 1) if I > 1 else 0
         risk_averse_q = q_random + risk_term
-        # variance = sum_squared / (I - 1) if I > 1 else 0
-        # std_dev = torch.sqrt(variance + 1e-8)
-        # risk_averse_q = -LAMBDA_P * std_dev
         
         return risk_averse_q
     
@@ -392,63 +361,64 @@ class QNetworkManager:
             self.update_target_networks()
     
     def learn_from_replay_buffer(self, network_idx):
-        """Học từ prioritized replay buffer với target network và gradient clipping"""
+        """Học từ replay buffer với target network và gradient clipping"""
         # 1. Lấy mạng và optimizer tương ứng
         network = self.q_networks[network_idx]
         target_network = self.target_networks[network_idx]
         optimizer = self.optimizers[network_idx]
         scheduler = self.schedulers[network_idx]
-
+        
         # Đặt network ở training mode
         network.train()
-
-        # 2. Lấy mẫu ngẫu nhiên từ prioritized replay buffer
-        (states, actions, rewards, next_states), indices, weights = self.replay_buffers[network_idx].sample(BATCH_SIZE, beta=0.4)
-
+        
+        # 2. Lấy mẫu ngẫu nhiên từ replay buffer
+        states, actions, rewards, next_states = self.replay_buffers[network_idx].sample(BATCH_SIZE)
+        
         # 3. Chuyển dữ liệu sang tensor
-        states_tensor = torch.FloatTensor(states.reshape(BATCH_SIZE, -1))
-        next_states_tensor = torch.FloatTensor(next_states.reshape(BATCH_SIZE, -1))
-        rewards_tensor = torch.FloatTensor(rewards)
-        weights_tensor = torch.FloatTensor(weights).unsqueeze(1)  # (batch, 1)
-
+        states_tensor = torch.FloatTensor(states.reshape(BATCH_SIZE, -1)).to(device)
+        next_states_tensor = torch.FloatTensor(next_states.reshape(BATCH_SIZE, -1)).to(device)
+        rewards_tensor = torch.FloatTensor(rewards).to(device)
+        
         # 4. Tính Q-values hiện tại
-        current_q_values = network(states_tensor)  # (batch, num_actions)
-
+        current_q_values = network(states_tensor)
+        
         # 5. Tính target Q-values sử dụng target network
         with torch.no_grad():
             target_network.eval()
             next_q_values = target_network(next_states_tensor)
             max_next_q = torch.max(next_q_values, dim=1)[0]
-
+        
         # 6. Khởi tạo target Q-values
         target_q_values = current_q_values.clone().detach()
-
-        # 7. Cập nhật target Q-values cho từng mẫu, lưu TD-error để update priority
-        td_errors = np.zeros(BATCH_SIZE)
+        
+        # 7. Cập nhật target Q-values cho từng mẫu
         for idx in range(BATCH_SIZE):
             action_idx = action_to_index(actions[idx])
+            
+            # Lấy alpha từ bảng
             key = state_action_to_key(states[idx], actions[idx])
             alpha_value = self.alpha[network_idx].get(key, 1.0)
+            
+            # Tính TD error
             td_error = rewards_tensor[idx] + GAMMA * max_next_q[idx] - current_q_values[idx, action_idx]
-            td_errors[idx] = td_error.item()  # Save for PER update
+            
+            # Tính utility
             utility_value = u(td_error.item()) - X0
+            
+            # Cập nhật target Q-value
             target_q_values[idx, action_idx] = current_q_values[idx, action_idx] + alpha_value * utility_value
-
-        # 8. Tính loss với trọng số importance sampling
-        loss = (weights_tensor * (current_q_values - target_q_values) ** 2).mean()
-
+        
+        # 8. Tính loss và cập nhật mạng với gradient clipping
+        loss = F.mse_loss(current_q_values, target_q_values)
+        
         optimizer.zero_grad()
         loss.backward()
-
+        
         # Gradient clipping để tránh exploding gradients
         torch.nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.0)
-
+        
         optimizer.step()
         scheduler.step()  # Cập nhật learning rate
-
-        # 9. Update priorities in buffer
-        self.replay_buffers[network_idx].update_priorities(indices, td_errors)
-
 
 # Các hàm khởi tạo và cập nhật state
 def initialize_state():
@@ -647,11 +617,15 @@ if __name__ == "__main__":
     for frame in range(1, NUM_OF_FRAME + 1):
         # Cập nhật epsilon
         # EPSILON = EPSILON * LAMBDA
-        # if frame <= 1000:
-        #     EPSILON = 1  # Giữ nguyên = 0.5
-        # else:
+        if frame <= 1000:
+            EPSILON = 1  # Giữ nguyên = 0.5
+        else:
+            EPSILON = max(EPS_END, EPSILON * LAMBDA)
+        # EPSILON = max(EPS_END, EPSILON * LAMBDA)
+        # if frame > 1000:
         #     EPSILON = max(EPS_END, EPSILON * LAMBDA)
-        EPSILON = max(EPS_END, EPSILON * LAMBDA)
+        # else: 
+        #     EPSILON = 1
         # Thiết lập môi trường
         h_base_t = h_base[frame]
         
@@ -714,7 +688,8 @@ if __name__ == "__main__":
     
 
 
-    print("Avg reward:", reward_plot[-1])
+    total_reward = np.sum(reward_plot)
+    print("Avg reward:", total_reward/10000)
     total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
     total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
     print("Avg success:", total_received/total_send)
@@ -725,167 +700,165 @@ if __name__ == "__main__":
 
     #tính trung bình plr của từng thiết bị qua tất cả frames
     avg_plr_of_devices_plot = []
-    delta_p = 0.0
-    last_block = packet_loss_rate_plot[-1]      # Lấy block cuối cùng (2D array)
-    row_sums = np.sum(last_block, axis=1)  # Tính tổng theo hàng
-    for idx, s in enumerate(row_sums):
-        avg_plr_of_devices_plot.append(s) #lưu trữ giá trị trung bình plr của từng thiết bị
-        diff = PLR_MAX - s
-        delta_p += diff
-        print(f"Thiết bị {idx + 1}: Avg packet loss rate = {s}") #in ra giá trị trung bình plr của từng thiết bị
-    delta_p = delta_p / NUM_DEVICES  # Giá trị trung bình lỗi trên tất cả các thiết bị
-    print("Avg plr_total_of_device:", delta_p)
-    
-    # tunable_parameters = {
-    # 'h_base_sub6': h_base_t,
-    # 'state': state_plot,
-    # 'action': action_plot,
-    # 'reward': reward_plot,
-    # 'packet_loss_rate': packet_loss_rate_plot,
-    # 'rate_plot': rate_plot,
-    # 'number_of_received_packet': number_of_received_packet_plot,
-    # 'number_of_send_packet': number_of_send_packet_plot,
-    # 'Avg reward': reward_plot[-1],
-    # 'Avg success': total_received/total_send,
-    # 'avg_plr_of_devices': avg_plr_of_devices_plot,
-    # 'avg_plr_total_of_device (delta_p)': delta_p,
-    # }
+    for i, total in enumerate(total_plr_per_device):
+        avg_plr_of_devices = 0.0
+        avg_plr_of_devices_plot.append(total/NUM_OF_FRAME)
+        print(f"Thiết bị {i + 1}: Avg packet loss rate = {total/NUM_OF_FRAME}")
+        avg_plr_of_devices += PLR_MAX*NUM_OF_FRAME - total
+    avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
 
-    # save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_05')
+    print("Avg plr_total_of_device:", avg_plr_total_of_device)
+    
+    tunable_parameters = {
+    'h_base_sub6': h_base_t,
+    'state': state_plot,
+    'action': action_plot,
+    'reward': reward_plot,
+    'packet_loss_rate': packet_loss_rate_plot,
+    'rate_plot': rate_plot,
+    'number_of_received_packet': number_of_received_packet_plot,
+    'number_of_send_packet': number_of_send_packet_plot,
+    'Avg reward': total_reward/10000,
+    'Avg success': total_received/total_send,
+    'avg_plr_of_devices': avg_plr_of_devices_plot,
+    'avg_plr_total_of_device (delta_p)': avg_plr_total_of_device,
+    }
+
+    save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_gpu')
     
     # ===== View test các trường hợp tunning
-    #Vẽ đồ thị reward
-    plt.figure(figsize=(12, 6))
-    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
-    # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
-    plt.xlabel('Frame')
-    plt.ylabel('Reward')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-    
-    # Vẽ đồ thị PLR
-    packet_loss_rate_plot = np.array(packet_loss_rate_plot)
-    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
-    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
-
-    
-    plt.figure(figsize=(12, 6))
-    for device_idx in range(NUM_DEVICES):
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
-        # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
-        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
-    
-    # Thêm đường chuẩn y = 0.1
-    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
-
-    # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
-    plt.xlabel('Frame')
-    plt.ylabel('PLR')
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
-    # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
-    action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
-    num_frames, num_devices = action_array.shape
-    # Chuẩn bị mảng lưu phần trăm
-    # shape: (3 hành động, num_devices)
-    percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
-
-    # Tính phần trăm cho từng hành động theo từng thiết bị
-    for action in [0, 1, 2]:
-        # Đếm số lần action xuất hiện ở từng cột (thiết bị)
-        counts = np.sum(action_array == action, axis=0)
-        percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
-
-    labels = [f'Device {i+1}' for i in range(num_devices)]
-    x = np.arange(num_devices)  # Vị trí cột
-    width = 0.25  # Độ rộng của mỗi nhóm cột
-
-    plt.figure(figsize=(10, 6))
-    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
-    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
-    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
-
-    plt.ylabel('Ratio (%)')
-    # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
-    plt.xticks(x, labels)
-    plt.ylim(0, 100)
-    plt.legend()
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.show()
-    
-    
-    # ===== Tạo thư mục lưu ảnh theo thời gian =====
-    # keyword = "scenario_{}Q_{}D".format(I, NUM_DEVICES)
-
-    # # Lấy timestamp + ghép keyword
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # folder_name = f"{timestamp}_{keyword}"
-    # save_dir = os.path.join("out_img", folder_name)
-    # os.makedirs(save_dir, exist_ok=True)
-
-    # # ===== 1. Đồ thị Reward theo Frame =====
+    # #Vẽ đồ thị reward
     # plt.figure(figsize=(12, 6))
     # plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    # # plt.title('Biểu đồ Reward theo từng Frame (với Replay Buffer)')
     # plt.xlabel('Frame')
     # plt.ylabel('Reward')
     # plt.grid(True)
     # plt.legend()
     # plt.tight_layout()
-    # reward_path = os.path.join(save_dir, "reward_plot.png")
-    # plt.savefig(reward_path)
-    # plt.clf()
-    # print(f"✅ Đã lưu: {reward_path}")
-
-    # # ===== 2. Đồ thị PLR theo thiết bị =====
+    # plt.show()
+    
+    # # Vẽ đồ thị PLR
     # packet_loss_rate_plot = np.array(packet_loss_rate_plot)
     # frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
     # plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
 
+    
     # plt.figure(figsize=(12, 6))
     # for device_idx in range(NUM_DEVICES):
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 0], label=f'Device {device_idx+1} - sub-6GHz')
+    #     # plt.plot(frames, packet_loss_rate_plot[:, device_idx, 1], label=f'Device {device_idx+1} - mmWave')
     #     plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    
+    # # Thêm đường chuẩn y = 0.1
     # plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+
+    # # plt.title('Tỉ lệ mất gói tin (PLR) theo từng Frame (với Replay Buffer)')
     # plt.xlabel('Frame')
     # plt.ylabel('PLR')
     # plt.grid(True)
     # plt.legend()
     # plt.tight_layout()
-    # plr_path = os.path.join(save_dir, "plr_plot.png")
-    # plt.savefig(plr_path)
-    # plt.clf()
-    # print(f"✅ Đã lưu: {plr_path}")
+    # plt.show()
 
-    # # ===== 3. Biểu đồ tỉ lệ sử dụng action =====
-    # action_array = np.array(action_plot)
+    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
+    # action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
     # num_frames, num_devices = action_array.shape
-    # percentages = np.zeros((3, num_devices))  # actions: 0, 1, 2
+    # # Chuẩn bị mảng lưu phần trăm
+    # # shape: (3 hành động, num_devices)
+    # percentages = np.zeros((3, num_devices))  # 3 dòng: 0, 1, 2
 
+    # # Tính phần trăm cho từng hành động theo từng thiết bị
     # for action in [0, 1, 2]:
+    #     # Đếm số lần action xuất hiện ở từng cột (thiết bị)
     #     counts = np.sum(action_array == action, axis=0)
-    #     percentages[action] = counts / num_frames * 100
+    #     percentages[action] = counts / num_frames * 100  # Chuyển sang phần trăm
 
     # labels = [f'Device {i+1}' for i in range(num_devices)]
-    # x = np.arange(num_devices)
-    # width = 0.25
+    # x = np.arange(num_devices)  # Vị trí cột
+    # width = 0.25  # Độ rộng của mỗi nhóm cột
 
     # plt.figure(figsize=(10, 6))
     # plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
     # plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
     # plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+
     # plt.ylabel('Ratio (%)')
+    # # plt.title('Interface usage distribution per device, scenario 1 (với Replay Buffer)')
     # plt.xticks(x, labels)
     # plt.ylim(0, 100)
     # plt.legend()
     # plt.grid(True, axis='y', linestyle='--', alpha=0.7)
     # plt.tight_layout()
-    # action_path = os.path.join(save_dir, "action_usage.png")
-    # plt.savefig(action_path)
-    # plt.clf()
-    # print(f"✅ Đã lưu: {action_path}")
+    # plt.show()
+    
+    
+    # ===== Tạo thư mục lưu ảnh theo thời gian =====
+    keyword = "scenario_{}Q_{}D".format(I, NUM_DEVICES)
+
+    # Lấy timestamp + ghép keyword
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{timestamp}_{keyword}"
+    save_dir = os.path.join("out_img", folder_name)
+    os.makedirs(save_dir, exist_ok=True)
+
+    # ===== 1. Đồ thị Reward theo Frame =====
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, NUM_OF_FRAME + 1), reward_plot, label='Reward theo frame', color='green')
+    plt.xlabel('Frame')
+    plt.ylabel('Reward')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    reward_path = os.path.join(save_dir, "reward_plot.png")
+    plt.savefig(reward_path, dpi=300)
+    plt.clf()
+    print(f"✅ Đã lưu: {reward_path}")
+
+    # ===== 2. Đồ thị PLR theo thiết bị =====
+    packet_loss_rate_plot = np.array(packet_loss_rate_plot)
+    frames = np.arange(1, packet_loss_rate_plot.shape[0] + 1)
+    plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2)
+
+    plt.figure(figsize=(12, 6))
+    for device_idx in range(NUM_DEVICES):
+        plt.plot(frames, plr_sum_per_device[:, device_idx], label=f'Device {device_idx+1}')
+    plt.axhline(y=0.1, color='black', linestyle='--', linewidth=1.5, label='plr_max')
+    plt.xlabel('Frame')
+    plt.ylabel('PLR')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plr_path = os.path.join(save_dir, "plr_plot.png")
+    plt.savefig(plr_path, dpi=300)
+    plt.clf()
+    print(f"✅ Đã lưu: {plr_path}")
+
+    # ===== 3. Biểu đồ tỉ lệ sử dụng action =====
+    action_array = np.array(action_plot)
+    num_frames, num_devices = action_array.shape
+    percentages = np.zeros((3, num_devices))  # actions: 0, 1, 2
+
+    for action in [0, 1, 2]:
+        counts = np.sum(action_array == action, axis=0)
+        percentages[action] = counts / num_frames * 100
+
+    labels = [f'Device {i+1}' for i in range(num_devices)]
+    x = np.arange(num_devices)
+    width = 0.25
+
+    plt.figure(figsize=(10, 6))
+    plt.bar(x - width, percentages[0], width, label='sub-6GHz (0)', color='skyblue')
+    plt.bar(x,         percentages[1], width, label='mmWave (1)', color='orange')
+    plt.bar(x + width, percentages[2], width, label='Cả hai (2)', color='green')
+    plt.ylabel('Ratio (%)')
+    plt.xticks(x, labels)
+    plt.ylim(0, 100)
+    plt.legend()
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    action_path = os.path.join(save_dir, "action_usage.png")
+    plt.savefig(action_path, dpi=300)
+    plt.clf()
+    print(f"✅ Đã lưu: {action_path}")
