@@ -12,9 +12,9 @@ import os
 from datetime import datetime
 
 # Hyperparameters
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -269,7 +269,7 @@ class QNetworkManager:
         
         # Thêm target networks cho stable training
         self.target_networks = []
-        self.target_update_freq = 1000  # Cập nhật target network mỗi C steps
+        self.target_update_freq = 200  # Cập nhật target network mỗi C steps
         self.update_counter = 0
         
         for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng
@@ -339,8 +339,10 @@ class QNetworkManager:
         # Tính Q risk-averse tại action để lựa ra action có giá trị lớn nhất
         risk_averse_q = self.compute_risk_averse_Q(random_idx, state)
         
+        noise = 1e-8 * torch.rand_like(risk_averse_q)
+        best_action_idx = torch.argmax(risk_averse_q + noise).item()
         # Chọn action với Q risk-averse cao nhất được tính từ target_network được chọn ngẫu nhiên ra
-        best_action_idx = torch.argmax(risk_averse_q).item()
+        # best_action_idx = torch.argmax(risk_averse_q).item()
         return index_to_action(best_action_idx)
     
     def update_q_network(self,buffer_idx, network_idx, state, action, reward, next_state):
@@ -725,7 +727,7 @@ if __name__ == "__main__":
     'avg_plr_total_of_device (delta_p)': avg_plr_total_of_device,
     }
 
-    save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_gpu')
+    save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_mps')
     
     # ===== View test các trường hợp tunning
     # #Vẽ đồ thị reward
@@ -796,7 +798,7 @@ if __name__ == "__main__":
     
     
     # ===== Tạo thư mục lưu ảnh theo thời gian =====
-    keyword = "scenario_{}Q_{}D".format(I, NUM_DEVICES)
+    keyword = "scenario_mps_{}Q_{}D".format(I, NUM_DEVICES)
 
     # Lấy timestamp + ghép keyword
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

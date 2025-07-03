@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 
 
 # Thiết lập tham số
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 NUM_ACTIONS = 3  # 3 hành động: 0 (Sub-6GHz), 1 (mmWave), 2 (cả hai)

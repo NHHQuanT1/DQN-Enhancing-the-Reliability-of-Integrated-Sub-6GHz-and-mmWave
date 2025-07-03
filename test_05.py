@@ -12,9 +12,9 @@ import os
 from datetime import datetime
 
 # Hyperparameters
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -26,7 +26,7 @@ EPSILON = 1
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 4  # Số lượng Q-network
+I = 2  # Số lượng Q-network
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -580,12 +580,12 @@ def allocate(action): #phân phối từ action đến các chính xác kênh c�
         rand_mW.append(i)
         
     for k in range(NUM_DEVICES):
-        if(action[k] == 0):
+        if(action[k] == 1):
             if len(rand_sub) > 0:
                 rand_index = np.random.randint(len(rand_sub))
                 sub[k] = rand_sub[rand_index]
                 rand_sub.pop(rand_index)
-        if(action[k] == 1):
+        if(action[k] == 0):
             if len(rand_mW) > 0:
                 rand_index = np.random.randint(len(rand_mW))
                 mW[k] = rand_mW[rand_index]
@@ -607,10 +607,10 @@ def perform_action(action, l_sub_max, l_mW_max):
     for k in range(NUM_DEVICES):
         l_sub_max_k = l_sub_max[k]
         l_mW_max_k = l_mW_max[k]
-        if(action[k] == 0):
+        if(action[k] == 1):
             number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS)
             number_of_packet[k, 1] = 0
-        if(action[k] == 1):
+        if(action[k] == 0):
             number_of_packet[k, 0] = 0
             number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
         if(action[k] == 2):
@@ -863,7 +863,7 @@ if __name__ == "__main__":
     
     
     # ===== Tạo thư mục lưu ảnh theo thời gian =====
-    keyword = "scenario_{}Q_{}D".format(I, NUM_DEVICES)
+    keyword = "scenario_test_05_{}Q_{}D".format(I, NUM_DEVICES)
 
     # Lấy timestamp + ghép keyword
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

@@ -12,9 +12,9 @@ import os
 from datetime import datetime
 
 # Hyperparameters
-NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 4  # Số beam mmWave (M)
+NUM_DEVICES = 12  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 14  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 14  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -268,7 +268,7 @@ class QNetworkManager:
         
         # Thêm target networks cho stable training
         self.target_networks = []
-        self.target_update_freq = 1000  # Cập nhật target network mỗi C steps
+        self.target_update_freq = 500  # Cập nhật target network mỗi C steps
         self.update_counter = 0
         
         for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng
@@ -700,14 +700,16 @@ if __name__ == "__main__":
 
     #tính trung bình plr của từng thiết bị qua tất cả frames
     avg_plr_of_devices_plot = []
-    for i, total in enumerate(total_plr_per_device):
-        avg_plr_of_devices = 0.0
-        avg_plr_of_devices_plot.append(total/NUM_OF_FRAME)
-        print(f"Thiết bị {i + 1}: Avg packet loss rate = {total/NUM_OF_FRAME}")
-        avg_plr_of_devices += PLR_MAX*NUM_OF_FRAME - total
-    avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
-
-    print("Avg plr_total_of_device:", avg_plr_total_of_device)
+    delta_p = 0.0
+    last_block = packet_loss_rate_plot[-1]      # Lấy block cuối cùng (2D array)
+    row_sums = np.sum(last_block, axis=1)  # Tính tổng theo hàng
+    for idx, s in enumerate(row_sums):
+        avg_plr_of_devices_plot.append(s) #lưu trữ giá trị trung bình plr của từng thiết bị
+        diff = PLR_MAX - s
+        delta_p += diff
+        print(f"Thiết bị {idx + 1}: Avg packet loss rate = {s}") #in ra giá trị trung bình plr của từng thiết bị
+    delta_p = delta_p / NUM_DEVICES  # Giá trị trung bình lỗi trên tất cả các thiết bị
+    print("Avg plr_total_of_device:", delta_p)
     
     tunable_parameters = {
     'h_base_sub6': h_base_t,
@@ -718,10 +720,10 @@ if __name__ == "__main__":
     'rate_plot': rate_plot,
     'number_of_received_packet': number_of_received_packet_plot,
     'number_of_send_packet': number_of_send_packet_plot,
-    'Avg reward': total_reward/10000,
+    'Avg reward': reward_plot[-1],
     'Avg success': total_received/total_send,
     'avg_plr_of_devices': avg_plr_of_devices_plot,
-    'avg_plr_total_of_device (delta_p)': avg_plr_total_of_device,
+    'avg_plr_total_of_device (delta_p)': delta_p,
     }
 
     save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_gpu')
@@ -761,7 +763,7 @@ if __name__ == "__main__":
     # plt.tight_layout()
     # plt.show()
 
-    # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
+    # # ===== Biểu đồ tỉ lệ sử dụng action cho từng thiết bị =====
     # # Giả sử action_plot là một list chứa các array shape (NUM_DEVICES,)
     # action_array = np.array(action_plot)  # shape: (num_frames, num_devices)
     # num_frames, num_devices = action_array.shape
