@@ -14,7 +14,7 @@ from datetime import datetime
 # Hyperparameters
 NUM_DEVICES = 12  # Số thiết bị (K=3, scenario 1)
 NUM_SUBCHANNELS = 14  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 14  # Số beam mmWave (M)
+NUM_BEAMS = 16  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -26,7 +26,7 @@ EPSILON = 1
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 2  # Số lượng Q-network
+I = 4  # Số lượng Q-network
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -268,7 +268,7 @@ class QNetworkManager:
         
         # Thêm target networks cho stable training
         self.target_networks = []
-        self.target_update_freq = 500  # Cập nhật target network mỗi C steps
+        self.target_update_freq = 200  # Cập nhật target network mỗi C steps
         self.update_counter = 0
         
         for _ in range(I): #với mỗi mạng chính tạo ra một target_network tương ứng

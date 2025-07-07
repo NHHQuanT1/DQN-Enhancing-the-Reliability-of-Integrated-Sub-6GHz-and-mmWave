@@ -691,8 +691,7 @@ if __name__ == "__main__":
     
 
 
-    total_reward = np.sum(reward_plot)
-    print("Avg reward:", total_reward/10000)
+    print("Avg reward:", reward_plot[-1])
     total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
     total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
     print("Avg success:", total_received/total_send)
@@ -703,14 +702,16 @@ if __name__ == "__main__":
 
     #tính trung bình plr của từng thiết bị qua tất cả frames
     avg_plr_of_devices_plot = []
-    for i, total in enumerate(total_plr_per_device):
-        avg_plr_of_devices = 0.0
-        avg_plr_of_devices_plot.append(total/NUM_OF_FRAME)
-        print(f"Thiết bị {i + 1}: Avg packet loss rate = {total/NUM_OF_FRAME}")
-        avg_plr_of_devices += PLR_MAX*NUM_OF_FRAME - total
-    avg_plr_total_of_device = avg_plr_of_devices / (NUM_DEVICES*NUM_OF_FRAME) #giá trị trung bình lỗi trên tất cả các thiết bị
-
-    print("Avg plr_total_of_device:", avg_plr_total_of_device)
+    delta_p = 0.0
+    last_block = packet_loss_rate_plot[-1]      # Lấy block cuối cùng (2D array)
+    row_sums = np.sum(last_block, axis=1)  # Tính tổng theo hàng
+    for idx, s in enumerate(row_sums):
+        avg_plr_of_devices_plot.append(s) #lưu trữ giá trị trung bình plr của từng thiết bị
+        diff = PLR_MAX - s
+        delta_p += diff
+        print(f"Thiết bị {idx + 1}: Avg packet loss rate = {s}") #in ra giá trị trung bình plr của từng thiết bị
+    delta_p = delta_p / NUM_DEVICES  # Giá trị trung bình lỗi trên tất cả các thiết bị
+    print("Avg plr_total_of_device:", delta_p)
     
     tunable_parameters = {
     'h_base_sub6': h_base_t,
@@ -721,10 +722,10 @@ if __name__ == "__main__":
     'rate_plot': rate_plot,
     'number_of_received_packet': number_of_received_packet_plot,
     'number_of_send_packet': number_of_send_packet_plot,
-    'Avg reward': total_reward/10000,
+    'Avg reward': reward_plot[-1],
     'Avg success': total_received/total_send,
     'avg_plr_of_devices': avg_plr_of_devices_plot,
-    'avg_plr_total_of_device (delta_p)': avg_plr_total_of_device,
+    'avg_plr_total_of_device (delta_p)': delta_p,
     }
 
     save.save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_mps')

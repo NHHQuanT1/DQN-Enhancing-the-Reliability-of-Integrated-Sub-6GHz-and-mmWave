@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 
 
 # Thiết lập tham số
-NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 16  # Số beam mmWave (M)
+NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 NUM_ACTIONS = 3  # 3 hành động: 0 (Sub-6GHz), 1 (mmWave), 2 (cả hai)
@@ -208,14 +208,32 @@ def r_mW(h, device_index):
 #     pass
 
 #Caculator packet loss rate (l_kv: so goi tin quyet dinh gui boi AP)
-def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
-    if(l_kv == 0): #số gói tin gửi đi = 0
-        packet_loss_rate = ((t-1)/t)*old_packet_loss_rate
-        return packet_loss_rate
-    elif(l_kv > 0):
-        packet_loss_rate = (1/t)*((t-1)*old_packet_loss_rate + (1 - omega_kv/l_kv))
-        return packet_loss_rate
+# def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
+#     if(l_kv == 0): #số gói tin gửi đi = 0
+#         packet_loss_rate = ((t-1)/t)*old_packet_loss_rate
+#         return packet_loss_rate
+#     elif(l_kv > 0):
+#         packet_loss_rate = (1/t)*((t-1)*old_packet_loss_rate + (1 - omega_kv/l_kv))
+#         return packet_loss_rate
 
+def packet_loss_rate(t, old_packet_loss_rate, omega_kv, l_kv):
+    # Đảm bảo đầu vào là mảng NumPy
+    omega_kv = np.asarray(omega_kv)
+    l_kv = np.asarray(l_kv)
+    old_packet_loss_rate = np.asarray(old_packet_loss_rate)
+    
+    # Khởi tạo mảng kết quả với cùng kích thước
+    result = np.zeros_like(omega_kv, dtype=float)
+    
+    # Trường hợp l_kv == 0
+    mask_zero = (l_kv == 0)
+    result[mask_zero] = ((t-1)/t) * old_packet_loss_rate[mask_zero]
+    
+    # Trường hợp l_kv > 0
+    mask_positive = (l_kv > 0)
+    result[mask_positive] = (1/t) * ((t-1) * old_packet_loss_rate[mask_positive] + (1 - omega_kv[mask_positive]/l_kv[mask_positive]))
+    
+    return result
 
 
 # device_positions = initialize_pos_of_devices()

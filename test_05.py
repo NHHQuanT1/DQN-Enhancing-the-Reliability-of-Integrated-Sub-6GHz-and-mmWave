@@ -12,9 +12,9 @@ import os
 from datetime import datetime
 
 # Hyperparameters
-NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 16  # Số beam mmWave (M)
+NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -106,12 +106,12 @@ def action_to_index(action):
     """Chuyển action từ array sang index"""
     index = 0
     for i, a in enumerate(action): # Duyệt qua phần tử a của action ứng với chỉ số i, tức giá trị a[i] trong action truyền vào
-        index += int(a) * (3 ** i) # index = a + 3^i
+        index += int(a) * (3 ** i) # index = a * 3^i
     return index
 
 def index_to_action(index):
     """Chuyển index thành action array"""
-    action = np.zeros(NUM_DEVICES, dtype=int)
+    action = np.zeros(NUM_DEVICES, dtype=int) #khởi tạo mảng với kích thước NUM_DEVICES với tất cả các phần tử là 0
     for i in range(NUM_DEVICES):
         action[i] = index % 3
         index = index // 3
@@ -580,12 +580,12 @@ def allocate(action): #phân phối từ action đến các chính xác kênh c�
         rand_mW.append(i)
         
     for k in range(NUM_DEVICES):
-        if(action[k] == 1):
+        if(action[k] == 0):
             if len(rand_sub) > 0:
                 rand_index = np.random.randint(len(rand_sub))
                 sub[k] = rand_sub[rand_index]
                 rand_sub.pop(rand_index)
-        if(action[k] == 0):
+        if(action[k] == 1):
             if len(rand_mW) > 0:
                 rand_index = np.random.randint(len(rand_mW))
                 mW[k] = rand_mW[rand_index]
@@ -607,10 +607,10 @@ def perform_action(action, l_sub_max, l_mW_max):
     for k in range(NUM_DEVICES):
         l_sub_max_k = l_sub_max[k]
         l_mW_max_k = l_mW_max[k]
-        if(action[k] == 1):
+        if(action[k] == 0):
             number_of_packet[k, 0] = min(l_sub_max_k, MAX_PACKETS)
             number_of_packet[k, 1] = 0
-        if(action[k] == 0):
+        if(action[k] == 1):
             number_of_packet[k, 0] = 0
             number_of_packet[k, 1] = min(l_mW_max_k, MAX_PACKETS)
         if(action[k] == 2):
@@ -759,10 +759,38 @@ if __name__ == "__main__":
     total_received = sum(np.sum(arr) for arr in number_of_received_packet_plot)
     total_send = sum(np.sum(arr) for arr in number_of_send_packet_plot)
     print("Avg success:", total_received/total_send)
+    
+    # Tính tổng của hai cột cho từng hàng trong mỗi mảng
+    recv_row_sums_per_array = [np.sum(recv_array, axis=1) for recv_array in number_of_received_packet_plot]
+    send_row_sums_per_array = [np.sum(send_array, axis=1) for send_array in number_of_send_packet_plot]
+
+    # Tính tổng các hàng tương ứng qua tất cả các mảng
+    total_recv_row_sums = np.sum(recv_row_sums_per_array, axis=0)
+    total_send_row_sums = np.sum(send_row_sums_per_array, axis=0)
+
+    # In tổng của các hàng
+    # print("Tổng các hàng tương ứng qua tất cả các mảng:")
+    for i, (recv_total, send_total) in enumerate(zip(total_recv_row_sums, total_send_row_sums), 1):
+        pass  # No operation, just to satisfy Python's indentation requirement
+
+    # Tính tỉ lệ của tổng các hàng
+    with np.errstate(divide='ignore', invalid='ignore'):
+        final_ratios = np.where(total_send_row_sums != 0, total_recv_row_sums / total_send_row_sums, 0)
+        final_ratios = np.nan_to_num(final_ratios, nan=0.0)
+
+    # In kết quả cuối cùng
+    # print("\nKết quả cuối cùng (mảng tỉ lệ):")
+    for i, ratio in enumerate(final_ratios, 1):
+        pass  # No operation, just to satisfy Python's indentation requirement
+    # Tính tổng của các tỉ lệ
+    total_ratio_sum = np.sum(final_ratios)
+    print(f"Avg Success: {total_ratio_sum/NUM_DEVICES:.3f}")
+    
     # ==== PLR per device =====
     packet_loss_rate_plot = np.array(packet_loss_rate_plot)
     plr_sum_per_device = np.sum(packet_loss_rate_plot, axis=2) #plr của từng thiết bị qua từng frame 
-    total_plr_per_device = np.sum(plr_sum_per_device, axis=0) #tổng của plr của tất cả frames cho từng thiết bị (10000 frames)
+    # total_plr_per_device = np.sum(plr_sum_per_device, axis=0) #tổng của plr của tất cả frames cho từng thiết bị (10000 frames)
+    total_plr_per_device = np.mean(plr_sum_per_device, axis=0) #tổng của plr của tất cả frames cho từng thiết bị (10000 frames)
 
     #tính trung bình plr của từng thiết bị qua tất cả frames
     avg_plr_of_devices_plot = []
@@ -773,7 +801,7 @@ if __name__ == "__main__":
         avg_plr_of_devices_plot.append(s) #lưu trữ giá trị trung bình plr của từng thiết bị
         diff = PLR_MAX - s
         delta_p += diff
-        print(f"Thiết bị {idx + 1}: Avg packet loss rate = {s}") #in ra giá trị trung bình plr của từng thiết bị
+        print(f"Thiết bị {idx + 1}: Avg packet loss rate = {s:.3f}") #in ra giá trị trung bình plr của từng thiết bị
     delta_p = delta_p / NUM_DEVICES  # Giá trị trung bình lỗi trên tất cả các thiết bị
     print("Avg plr_total_of_device:", delta_p)
     
