@@ -7,3 +7,4 @@ data/h_base_storage
 out_img/
 tunable_para_test_05/
 tunable_para_test_gpu/
+tunable_para_test_mps/

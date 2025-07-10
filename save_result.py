@@ -31,6 +31,7 @@ import numpy as np
 
 
 def save_tunable_parameters_txt(I, NUM_DEVICES, tunable_parameters, save_dir='tunable_para_test_03'):
+    np.set_printoptions(threshold=np.inf)
     # Tạo tên file dựa trên thời gian hiện tại
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     filename = f"{I}Q_{NUM_DEVICES}D_tunable_parameters_{current_time}.txt"

@@ -12,9 +12,9 @@ import os
 from datetime import datetime
 
 # Hyperparameters
-NUM_DEVICES = 10  # Số thiết bị (K=3, scenario 1)
-NUM_SUBCHANNELS = 16  # Số subchannel Sub-6GHz (N)
-NUM_BEAMS = 16  # Số beam mmWave (M)
+NUM_DEVICES = 3  # Số thiết bị (K=3, scenario 1)
+NUM_SUBCHANNELS = 4  # Số subchannel Sub-6GHz (N)
+NUM_BEAMS = 4  # Số beam mmWave (M)
 MAX_PACKETS = 6  # Số gói tin tối đa mỗi frame (L_k(t))
 PLR_MAX = 0.1  # Giới hạn PLR tối đa
 GAMMA = 0.9  # Discount factor
@@ -26,7 +26,7 @@ EPSILON = 1
 NUM_OF_FRAME = 10000
 T = 1e-3
 D = 8000
-I = 2  # Số lượng Q-network
+I = 4  # Số lượng Q-network
 LAMBDA_P = 0.5
 LAMBDA = 0.995
 X0 = 1
@@ -339,8 +339,8 @@ class QNetworkManager:
         # Tính Q risk-averse tại action để lựa ra action có giá trị lớn nhất
         risk_averse_q = self.compute_risk_averse_Q(random_idx, state)
         
-        noise = 1e-8 * torch.rand_like(risk_averse_q)
-        best_action_idx = torch.argmax(risk_averse_q + noise).item()
+        # noise = 1e-8 * torch.rand_like(risk_averse_q)
+        best_action_idx = torch.argmax(risk_averse_q).item()
         # Chọn action với Q risk-averse cao nhất được tính từ target_network được chọn ngẫu nhiên ra
         # best_action_idx = torch.argmax(risk_averse_q).item()
         return index_to_action(best_action_idx)
@@ -602,8 +602,8 @@ if __name__ == "__main__":
     allocation = allocate(action)
     packet_loss_rate = np.zeros(shape=(NUM_DEVICES, 2))
 
-    # h_base = create_h_base(NUM_OF_FRAME + 1)
-    h_base = save.save_or_load_h_base(I,NUM_DEVICES, NUM_OF_FRAME+1)
+    h_base = create_h_base(NUM_OF_FRAME + 1)
+    # h_base = save.save_or_load_h_base(I,NUM_DEVICES, NUM_OF_FRAME+1)
     h_base_t = h_base[0]
     average_r = compute_r(device_positions, h_base_t, allocation=allocate(action), frame=1)
     
@@ -615,6 +615,7 @@ if __name__ == "__main__":
     rate_plot = []
     number_of_received_packet_plot = []
     number_of_send_packet_plot = []
+    packet_loss_rate_plot_2 = []  # PLR copy để so sánh
     
     # Vòng lặp chính
     for frame in range(1, NUM_OF_FRAME + 1):
@@ -663,6 +664,7 @@ if __name__ == "__main__":
 
         packet_loss_rate = compute_packet_loss_rate(frame, packet_loss_rate, number_of_received_packet, number_of_send_packet)
         packet_loss_rate_plot.append(packet_loss_rate)
+    
         
         average_r = compute_average_rate(average_r, r, frame)
         
