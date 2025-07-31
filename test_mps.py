@@ -339,10 +339,10 @@ class QNetworkManager:
         # Tính Q risk-averse tại action để lựa ra action có giá trị lớn nhất
         risk_averse_q = self.compute_risk_averse_Q(random_idx, state)
         
-        # noise = 1e-8 * torch.rand_like(risk_averse_q)
-        best_action_idx = torch.argmax(risk_averse_q).item()
-        # Chọn action với Q risk-averse cao nhất được tính từ target_network được chọn ngẫu nhiên ra
+        noise = 1e-8 * torch.rand_like(risk_averse_q)
         # best_action_idx = torch.argmax(risk_averse_q).item()
+        # Chọn action với Q risk-averse cao nhất được tính từ target_network được chọn ngẫu nhiên ra
+        best_action_idx = torch.argmax(risk_averse_q).item()
         return index_to_action(best_action_idx)
     
     def update_q_network(self,buffer_idx, network_idx, state, action, reward, next_state):
